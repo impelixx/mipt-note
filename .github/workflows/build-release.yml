@@ -96,11 +96,11 @@ jobs:
       - name: Install JetBrains Mono
         run: |
           mkdir -p ~/.local/share/fonts/jetbrains-mono
-          cd ~/.local/share/fonts/jetbrains-mono
+          cd ~/. local/share/fonts/jetbrains-mono
           wget -q https://github.com/JetBrains/JetBrainsMono/releases/download/v2.304/JetBrainsMono-2.304.zip
           unzip -q JetBrainsMono-2.304.zip
-          # Удаляем variable fonts, оставляем только статические
-          rm -rf fonts/variable
+          # Remove variable fonts that xdvipdfmx cannot handle
+          rm -rf fonts/variable/
           fc-cache -f -v
 
       - name: Get version info
