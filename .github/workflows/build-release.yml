@@ -6,21 +6,15 @@ on:
     paths:
       - 'subjects/**/*.tex'
       - 'subjects/**/*.sty'
-      - 'template/**/*.tex'
-      - 'template/**/*.sty'
   workflow_dispatch:
     inputs:
-      force_all:
-        description: 'Force rebuild all subjects'
+      subject:
+        description: 'Subject to rebuild (leave empty for all changed)'
         required: false
-        default: 'false'
-        type: boolean
+        type: string
 
 permissions:
   contents: write
-
-env:
-  VERSIONS_FILE: '.versions.json'
 
 jobs:
   detect-changes:
@@ -37,44 +31,43 @@ jobs:
       - name: Detect changed subjects
         id: detect
         run: |
-          # Получить список всех предметов
-          ALL_SUBJECTS=$(find subjects -maxdepth 1 -mindepth 1 -type d -exec basename {} \; 2>/dev/null | sort || echo "")
-
-          if [ "${{ inputs.force_all }}" == "true" ] || [ -z "$(git rev-parse HEAD~1 2>/dev/null)" ]; then
-            # Принудительная пересборка всех или первый коммит
-            CHANGED="$ALL_SUBJECTS"
+          # Если указан конкретный предмет
+          if [ -n "${{ inputs.subject }}" ]; then
+            if [ -f "subjects/${{ inputs.subject }}/main.tex" ]; then
+              CHANGED="${{ inputs.subject }}"
+            else
+              echo "Subject ${{ inputs.subject }} not found"
+              exit 1
+            fi
+          elif [ -z "$(git rev-parse HEAD~1 2>/dev/null)" ]; then
+            # Первый коммит — собрать все
+            CHANGED=$(find subjects -maxdepth 1 -mindepth 1 -type d -exec basename {} \; 2>/dev/null | sort || echo "")
           else
             # Найти изменённые предметы
             CHANGED=$(git diff --name-only HEAD~1 HEAD | grep "^subjects/" | cut -d'/' -f2 | sort -u || echo "")
-
-            # Также проверить изменения в template (пересобрать все)
-            if git diff --name-only HEAD~1 HEAD | grep -q "^template/"; then
-              CHANGED="$ALL_SUBJECTS"
-            fi
           fi
 
-          # Фильтровать только существующие предметы с main.tex
-          VALID_SUBJECTS=""
+          # Фильтровать только существующие
+          VALID=""
           for subj in $CHANGED; do
             if [ -f "subjects/$subj/main.tex" ]; then
-              VALID_SUBJECTS="$VALID_SUBJECTS $subj"
+              VALID="$VALID $subj"
             fi
           done
-          VALID_SUBJECTS=$(echo $VALID_SUBJECTS | xargs)
+          VALID=$(echo $VALID | xargs)
 
-          echo "Changed subjects: $VALID_SUBJECTS"
+          echo "Subjects to build: $VALID"
 
-          # Формируем JSON массив для matrix
-          if [ -n "$VALID_SUBJECTS" ]; then
-            MATRIX=$(echo "$VALID_SUBJECTS" | tr ' ' '\n' | jq -R . | jq -s -c '{subject: .}')
+          if [ -n "$VALID" ]; then
+            MATRIX=$(echo "$VALID" | tr ' ' '\n' | jq -R . | jq -s -c '{subject: .}')
           else
             MATRIX='{"subject":[]}'
           fi
 
-          echo "subjects=$VALID_SUBJECTS" >> $GITHUB_OUTPUT
+          echo "subjects=$VALID" >> $GITHUB_OUTPUT
           echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
 
-  build:
+  build-and-release:
     needs: detect-changes
     if: needs.detect-changes.outputs.subjects != ''
     runs-on: ubuntu-latest
@@ -98,8 +91,7 @@ jobs:
             texlive-latex-extra \
             texlive-science \
             fonts-paratype \
-            latexmk \
-            jq
+            latexmk
 
       - name: Install JetBrains Mono
         run: |
@@ -109,269 +101,99 @@ jobs:
           unzip -q JetBrainsMono-2.304.zip -d jetbrains-mono
           fc-cache -f -v
 
-      - name: Calculate subject version
+      - name: Get version info
         id: version
         run: |
           SUBJECT="${{ matrix.subject }}"
           SUBJECT_DIR="subjects/$SUBJECT"
 
-          # Подсчёт коммитов, затрагивающих этот предмет
+          # Количество коммитов для этого предмета
           COMMIT_COUNT=$(git rev-list --count HEAD -- "$SUBJECT_DIR")
 
-          # Дата последнего изменения предмета
+          # Дата последнего изменения
           LAST_DATE=$(git log -1 --format="%cs" -- "$SUBJECT_DIR" | tr -d '-')
 
-          # Версия: v{дата}.{номер}
+          # Версия
           VERSION="v${LAST_DATE}.${COMMIT_COUNT}"
 
-          # Короткий хеш
-          SHORT_SHA=$(git rev-parse --short HEAD)
+          # Название предмета из main.tex
+          COURSE_NAME=$(grep -o '\\setcoursename{[^}]*}' "$SUBJECT_DIR/main.tex" | sed 's/\\setcoursename{//;s/}//' || echo "$SUBJECT")
 
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "commit_count=$COMMIT_COUNT" >> $GITHUB_OUTPUT
-          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
-
-          echo "Subject: $SUBJECT"
-          echo "Version: $VERSION"
-          echo "Commits: $COMMIT_COUNT"
+          echo "course_name=$COURSE_NAME" >> $GITHUB_OUTPUT
+          echo "date=$(date '+%Y-%m-%d %H:%M')" >> $GITHUB_OUTPUT
 
       - name: Build PDF
-        id: build
         run: |
-          SUBJECT="${{ matrix.subject }}"
-          cd "subjects/$SUBJECT"
-
-          echo "Building $SUBJECT..."
-
-          # Компиляция (2 прохода)
+          cd "subjects/${{ matrix.subject }}"
           latexmk -xelatex -interaction=nonstopmode -halt-on-error main.tex
 
-          if [ -f "main.pdf" ]; then
-            echo "success=true" >> $GITHUB_OUTPUT
-            echo "✓ Build successful"
-          else
-            echo "success=false" >> $GITHUB_OUTPUT
-            echo "✗ Build failed"
-            exit 1
-          fi
-
-      - name: Rename PDF
-        if: steps.build.outputs.success == 'true'
+      - name: Prepare release files
         run: |
           SUBJECT="${{ matrix.subject }}"
           VERSION="${{ steps.version.outputs.version }}"
-          mv "subjects/$SUBJECT/main.pdf" "subjects/$SUBJECT/${SUBJECT}-${VERSION}.pdf"
 
-      - name: Upload artifact
-        if: steps.build.outputs.success == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: pdf-${{ matrix.subject }}
-          path: subjects/${{ matrix.subject }}/*.pdf
-          retention-days: 1
+          mkdir -p release
+          cp "subjects/$SUBJECT/main.pdf" "release/${SUBJECT}.pdf"
+          cp "subjects/$SUBJECT/main.pdf" "release/${SUBJECT}-${VERSION}.pdf"
 
-  release:
-    needs: [detect-changes, build]
-    if: needs.detect-changes.outputs.subjects != ''
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Download all PDFs
-        uses: actions/download-artifact@v4
-        with:
-          path: pdfs
-          pattern: pdf-*
-          merge-multiple: false
-
-      - name: Prepare releases
-        id: prepare
+      - name: Delete old release for this subject
         run: |
-          mkdir -p output
-
-          # Собираем информацию о версиях
-          echo "{}" > versions.json
-
-          for dir in pdfs/pdf-*/; do
-            if [ -d "$dir" ]; then
-              SUBJECT=$(basename "$dir" | sed 's/pdf-//')
-              PDF=$(find "$dir" -name "*.pdf" | head -1)
-
-              if [ -f "$PDF" ]; then
-                # Извлекаем версию из имени файла
-                FILENAME=$(basename "$PDF")
-                VERSION=$(echo "$FILENAME" | sed "s/${SUBJECT}-//" | sed 's/.pdf//')
-
-                # Копируем с правильным именем
-                cp "$PDF" "output/${SUBJECT}.pdf"
-                cp "$PDF" "output/${SUBJECT}-${VERSION}.pdf"
-
-                # Сохраняем версию
-                jq --arg s "$SUBJECT" --arg v "$VERSION" \
-                   '. + {($s): $v}' versions.json > tmp.json && mv tmp.json versions.json
-
-                echo "Prepared: $SUBJECT ($VERSION)"
-              fi
-            fi
-          done
-
-          cat versions.json
-          echo "versions=$(cat versions.json | jq -c .)" >> $GITHUB_OUTPUT
-
-      - name: Generate release notes
-        run: |
-          DATE=$(date '+%Y-%m-%d')
-
-          cat > release_notes.md << 'HEADER'
-          # Конспекты лекций
-
-          Автоматическая сборка PDF-файлов конспектов.
-
-          ## Версии предметов
-
-          | Предмет | Версия | Скачать |
-          |---------|--------|---------|
-          HEADER
-
-          # Добавляем информацию о каждом предмете
-          for pdf in output/*.pdf; do
-            if [ -f "$pdf" ]; then
-              FILENAME=$(basename "$pdf")
-              # Пропускаем файлы с версией в имени
-              if [[ "$FILENAME" != *-v* ]]; then
-                SUBJECT="${FILENAME%.pdf}"
-                VERSION=$(jq -r --arg s "$SUBJECT" '.[$s] // "latest"' versions.json)
-                echo "| **$SUBJECT** | \`$VERSION\` | [📄 Скачать](https://github.com/${{ github.repository }}/releases/download/latest/${SUBJECT}.pdf) |" >> release_notes.md
-              fi
-            fi
-          done
-
-          cat >> release_notes.md << 'FOOTER'
-
-          ---
-
-          ## История версий
-
-          Каждый предмет версионируется отдельно по формату `vYYYYMMDD.N`, где:
-          - `YYYYMMDD` — дата последнего изменения
-          - `N` — количество коммитов, затрагивающих предмет
-
-          Также доступны файлы с версией в имени для скачивания конкретных версий.
-
-          ---
-          *Собрано автоматически с помощью GitHub Actions*
-          FOOTER
-
-          cat release_notes.md
-
-      - name: Delete old latest release
-        run: |
-          gh release delete latest --yes 2>/dev/null || true
-          git push origin :refs/tags/latest 2>/dev/null || true
+          gh release delete "${{ matrix.subject }}" --yes 2>/dev/null || true
+          git push origin :refs/tags/${{ matrix.subject }} 2>/dev/null || true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create latest release
+      - name: Create release for subject
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: latest
-          name: "📚 Последняя версия конспектов"
-          body_path: release_notes.md
-          files: output/*.pdf
+          tag_name: ${{ matrix.subject }}
+          name: "📄 ${{ steps.version.outputs.course_name }}"
+          body: |
+            # ${{ steps.version.outputs.course_name }}
+
+            **Версия:** `${{ steps.version.outputs.version }}`
+            **Обновлено:** ${{ steps.version.outputs.date }}
+
+            ## Скачать
+
+            - 📥 **[${{ matrix.subject }}.pdf](https://github.com/${{ github.repository }}/releases/download/${{ matrix.subject }}/${{ matrix.subject }}.pdf)** — актуальная версия
+            - 📥 [${{ matrix.subject }}-${{ steps.version.outputs.version }}.pdf](https://github.com/${{ github.repository }}/releases/download/${{ matrix.subject }}/${{ matrix.subject }}-${{ steps.version.outputs.version }}.pdf) — версия ${{ steps.version.outputs.version }}
+
+            ---
+
+            ### История версий
+
+            Формат версии: `vYYYYMMDD.N`
+            - `YYYYMMDD` — дата последнего изменения
+            - `N` — номер сборки
+
+            ---
+            *Собрано автоматически*
+          files: release/*.pdf
           draft: false
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create subject-specific releases
+      - name: Create versioned release (archive)
         run: |
-          # Создаём отдельный релиз для каждого обновлённого предмета
-          for pdf in output/*-v*.pdf; do
-            if [ -f "$pdf" ]; then
-              FILENAME=$(basename "$pdf" .pdf)
-              SUBJECT=$(echo "$FILENAME" | sed 's/-v[0-9]*\.[0-9]*//')
-              VERSION=$(echo "$FILENAME" | grep -o 'v[0-9]*\.[0-9]*')
-              TAG="${SUBJECT}-${VERSION}"
+          SUBJECT="${{ matrix.subject }}"
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="${SUBJECT}-${VERSION}"
 
-              # Проверяем, существует ли уже такой релиз
-              if ! gh release view "$TAG" &>/dev/null; then
-                echo "Creating release for $SUBJECT $VERSION"
+          # Проверяем, существует ли уже такой релиз
+          if ! gh release view "$TAG" &>/dev/null; then
+            gh release create "$TAG" \
+              --title "📄 ${{ steps.version.outputs.course_name }} ${VERSION}" \
+              --notes "Архивная версия конспекта **${{ steps.version.outputs.course_name }}**
 
-                gh release create "$TAG" \
-                  --title "📄 ${SUBJECT} ${VERSION}" \
-                  --notes "Обновление конспекта **${SUBJECT}**
+          **Версия:** \`${VERSION}\`
+          **Дата:** ${{ steps.version.outputs.date }}
 
-          Версия: \`${VERSION}\`
-          Дата: $(date '+%Y-%m-%d %H:%M')
-
-          [⬇️ Скачать PDF](https://github.com/${{ github.repository }}/releases/download/${TAG}/${FILENAME}.pdf)" \
-                  "$pdf"
-              else
-                echo "Release $TAG already exists, skipping"
-              fi
-            fi
-          done
+          ---
+          *Это архивная версия. Актуальная версия: [${SUBJECT}](https://github.com/${{ github.repository }}/releases/tag/${SUBJECT})*" \
+              "release/${SUBJECT}-${VERSION}.pdf"
+          fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  update-versions:
-    needs: [release]
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Download versions
-        uses: actions/download-artifact@v4
-        with:
-          path: pdfs
-          pattern: pdf-*
-          merge-multiple: false
-
-      - name: Update versions file
-        run: |
-          # Читаем существующий файл версий или создаём новый
-          if [ -f "${{ env.VERSIONS_FILE }}" ]; then
-            VERSIONS=$(cat "${{ env.VERSIONS_FILE }}")
-          else
-            VERSIONS='{}'
-          fi
-
-          # Обновляем версии
-          for dir in pdfs/pdf-*/; do
-            if [ -d "$dir" ]; then
-              SUBJECT=$(basename "$dir" | sed 's/pdf-//')
-              PDF=$(find "$dir" -name "*.pdf" | head -1)
-
-              if [ -f "$PDF" ]; then
-                FILENAME=$(basename "$PDF")
-                VERSION=$(echo "$FILENAME" | sed "s/${SUBJECT}-//" | sed 's/.pdf//')
-
-                VERSIONS=$(echo "$VERSIONS" | jq --arg s "$SUBJECT" --arg v "$VERSION" \
-                  '.[$s] = {version: $v, updated: now | strftime("%Y-%m-%d")}')
-              fi
-            fi
-          done
-
-          echo "$VERSIONS" | jq '.' > "${{ env.VERSIONS_FILE }}"
-          cat "${{ env.VERSIONS_FILE }}"
-
-      - name: Commit versions file
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          if [ -n "$(git status --porcelain ${{ env.VERSIONS_FILE }})" ]; then
-            git add "${{ env.VERSIONS_FILE }}"
-            git commit -m "chore: update versions [skip ci]"
-            git push
-          else
-            echo "No changes to commit"
-          fi
