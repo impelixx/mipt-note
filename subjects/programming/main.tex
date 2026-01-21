@@ -42,8 +42,6 @@
 
 \usepackage{catchfile}
 \newcommand{\includelectures}{%
-    % Подключить все файлы lec-*.tex из папки lectures/
-    % Файлы сортируются по имени, поэтому используйте формат lec-01, lec-02...
     \foreach \i in {1,...,99}{%
         \edef\lecturefile{lectures/lec-\ifnum\i<10 0\fi\i.tex}%
         \InputIfFileExists{\lecturefile}{}{}%
