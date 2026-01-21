@@ -159,41 +159,8 @@ jobs:
 
             - 📥 **[${{ matrix.subject }}.pdf](https://github.com/${{ github.repository }}/releases/download/${{ matrix.subject }}/${{ matrix.subject }}.pdf)** — актуальная версия
             - 📥 [${{ matrix.subject }}-${{ steps.version.outputs.version }}.pdf](https://github.com/${{ github.repository }}/releases/download/${{ matrix.subject }}/${{ matrix.subject }}-${{ steps.version.outputs.version }}.pdf) — версия ${{ steps.version.outputs.version }}
-
-            ---
-
-            ### История версий
-
-            Формат версии: `vYYYYMMDD.N`
-            - `YYYYMMDD` — дата последнего изменения
-            - `N` — номер сборки
-
-            ---
-            *Собрано автоматически*
           files: release/*.pdf
           draft: false
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create versioned release (archive)
-        run: |
-          SUBJECT="${{ matrix.subject }}"
-          VERSION="${{ steps.version.outputs.version }}"
-          TAG="${SUBJECT}-${VERSION}"
-
-          # Проверяем, существует ли уже такой релиз
-          if ! gh release view "$TAG" &>/dev/null; then
-            gh release create "$TAG" \
-              --title "📄 ${{ steps.version.outputs.course_name }} ${VERSION}" \
-              --notes "Архивная версия конспекта **${{ steps.version.outputs.course_name }}**
-
-          **Версия:** \`${VERSION}\`
-          **Дата:** ${{ steps.version.outputs.date }}
-
-          ---
-          *Это архивная версия. Актуальная версия: [${SUBJECT}](https://github.com/${{ github.repository }}/releases/tag/${SUBJECT})*" \
-              "release/${SUBJECT}-${VERSION}.pdf"
-          fi
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
