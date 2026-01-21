@@ -1,0 +1,172 @@
+% =============================================================================
+% БЫСТРЫЕ КОМАНДЫ ДЛЯ КОНСПЕКТОВ
+% =============================================================================
+% Добавляйте свои команды в этот файл для ускорения набора
+
+% =============================================================================
+% МАТЕМАТИКА: МНОЖЕСТВА
+% =============================================================================
+
+\newcommand{\N}{\mathbb{N}}           % Натуральные числа
+\newcommand{\Z}{\mathbb{Z}}           % Целые числа
+\newcommand{\Q}{\mathbb{Q}}           % Рациональные числа
+\newcommand{\R}{\mathbb{R}}           % Вещественные числа
+\newcommand{\C}{\mathbb{C}}           % Комплексные числа
+\newcommand{\F}{\mathbb{F}}           % Поле
+
+\newcommand{\set}[1]{\left\{#1\right\}}           % {x}
+\newcommand{\setmid}[2]{\left\{#1\mid#2\right\}}  % {x | условие}
+\newcommand{\card}[1]{\left|#1\right|}            % |A| мощность
+
+% =============================================================================
+% МАТЕМАТИКА: ОПЕРАЦИИ
+% =============================================================================
+
+\newcommand{\abs}[1]{\left|#1\right|}             % |x|
+\newcommand{\norm}[1]{\left\|#1\right\|}          % ||x||
+\newcommand{\floor}[1]{\left\lfloor#1\right\rfloor}
+\newcommand{\ceil}[1]{\left\lceil#1\right\rceil}
+\newcommand{\inner}[2]{\langle#1,#2\rangle}       % <x,y> скалярное произведение
+
+\DeclareMathOperator{\sgn}{sgn}
+\DeclareMathOperator{\Ker}{Ker}
+\DeclareMathOperator{\Img}{Im}
+\DeclareMathOperator{\rk}{rk}
+\DeclareMathOperator{\tr}{tr}
+\DeclareMathOperator{\diag}{diag}
+\DeclareMathOperator{\const}{const}
+
+% =============================================================================
+% МАТЕМАТИКА: ПРЕДЕЛЫ И СУММЫ
+% =============================================================================
+
+\newcommand{\limn}{\lim_{n\to\infty}}             % lim n->inf
+\newcommand{\limx}[1]{\lim_{x\to#1}}              % lim x->a
+\newcommand{\sumn}{\sum_{n=1}^{\infty}}           % sum n=1 to inf
+\newcommand{\sumk}{\sum_{k=1}^{n}}                % sum k=1 to n
+\newcommand{\prodn}{\prod_{n=1}^{\infty}}         % prod n=1 to inf
+
+% =============================================================================
+% МАТЕМАТИКА: ПРОИЗВОДНЫЕ И ИНТЕГРАЛЫ
+% =============================================================================
+
+\newcommand{\dd}{\,\mathrm{d}}                    % дифференциал
+\newcommand{\dv}[2]{\frac{\mathrm{d}#1}{\mathrm{d}#2}}    % d/dx
+\newcommand{\ddv}[2]{\frac{\mathrm{d}^2#1}{\mathrm{d}#2^2}} % d²/dx²
+\newcommand{\pdv}[2]{\frac{\partial#1}{\partial#2}}        % частная производная
+\newcommand{\pddv}[2]{\frac{\partial^2#1}{\partial#2^2}}   % вторая частная
+
+% =============================================================================
+% МАТЕМАТИКА: СТРЕЛКИ И ОТНОШЕНИЯ
+% =============================================================================
+
+\newcommand{\then}{\Rightarrow}                   % =>
+\newcommand{\onlyif}{\Leftarrow}                  % <=
+\newcommand{\iff}{\Leftrightarrow}                % <=>
+\newcommand{\xto}[1]{\xrightarrow{#1}}            % стрелка с надписью
+\newcommand{\mto}{\mapsto}                        % |->
+
+\newcommand{\eq}{\equiv}                          % тождественно равно
+\newcommand{\neq}{\not\equiv}
+\newcommand{\iso}{\cong}                          % изоморфизм
+
+% =============================================================================
+% МАТЕМАТИКА: СОКРАЩЕНИЯ
+% =============================================================================
+
+\newcommand{\eps}{\varepsilon}
+\newcommand{\vphi}{\varphi}
+\newcommand{\vthe}{\vartheta}
+\newcommand{\es}{\varnothing}                     % пустое множество
+
+\newcommand{\ol}[1]{\overline{#1}}                % черта сверху
+\newcommand{\ul}[1]{\underline{#1}}               % черта снизу
+\newcommand{\wt}[1]{\widetilde{#1}}               % тильда
+\newcommand{\wh}[1]{\widehat{#1}}                 % шляпка
+
+% =============================================================================
+% ФОРМАТИРОВАНИЕ: ТЕКСТ
+% =============================================================================
+
+\newcommand{\term}[1]{\textbf{#1}}                % Термин (выделение)
+\newcommand{\eng}[1]{\textenglish{#1}}            % Английский текст
+\newcommand{\todo}[1]{{\color{red}\textbf{TODO:} #1}}  % Пометка TODO
+
+% =============================================================================
+% ФОРМАТИРОВАНИЕ: БЛОКИ
+% =============================================================================
+
+% Важная информация
+\newcommand{\important}[1]{%
+    \begin{thmbox}
+    \textbf{Важно:} #1
+    \end{thmbox}
+}
+
+% Примечание на полях
+\newcommand{\sidenote}[1]{%
+    \marginpar{\footnotesize\color{secondary}#1}
+}
+
+% Доказательство (короткая версия)
+\newcommand{\pf}[1]{%
+    \begin{proof}
+    #1
+    \end{proof}
+}
+
+% =============================================================================
+% БЫСТРЫЕ ОКРУЖЕНИЯ
+% =============================================================================
+
+% Теорема в боксе
+\newenvironment{thm}[1][]{%
+    \begin{thmbox}
+    \begin{theorem}[#1]
+}{%
+    \end{theorem}
+    \end{thmbox}
+}
+
+% Определение в боксе
+\newenvironment{defn}[1][]{%
+    \begin{defbox}
+    \begin{definition}[#1]
+}{%
+    \end{definition}
+    \end{defbox}
+}
+
+% Лемма в боксе
+\newenvironment{lem}[1][]{%
+    \begin{thmbox}
+    \begin{lemma}[#1]
+}{%
+    \end{lemma}
+    \end{thmbox}
+}
+
+% =============================================================================
+% СПИСКИ БЫСТРЫЕ
+% =============================================================================
+
+% Компактный itemize
+\newenvironment{items}{%
+    \begin{itemize}[noitemsep,topsep=0pt]
+}{%
+    \end{itemize}
+}
+
+% Компактный enumerate
+\newenvironment{enum}{%
+    \begin{enumerate}[noitemsep,topsep=0pt]
+}{%
+    \end{enumerate}
+}
+
+% =============================================================================
+% ДОПОЛНИТЕЛЬНЫЕ КОМАНДЫ
+% =============================================================================
+% Добавляйте свои команды ниже:
+
+
