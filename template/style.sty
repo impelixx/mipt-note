@@ -83,14 +83,23 @@
     Scale=0.95
 ]
 
-\setmonofont{JetBrains Mono}[
-    Scale=0.85
-]
+% Моноширинный шрифт (с запасными вариантами)
+\IfFontExistsTF{Latin Modern Mono}{%
+    \setmonofont{Latin Modern Mono}[Scale=0.9]
+    \newfontfamily\cyrillicfonttt{Latin Modern Mono}[Scale=0.9]
+}{%
+    \IfFontExistsTF{Menlo}{%
+        \setmonofont{Menlo}[Scale=0.9]
+        \newfontfamily\cyrillicfonttt{Menlo}[Scale=0.9]
+    }{%
+        \setmonofont{Courier New}[Scale=0.9]
+        \newfontfamily\cyrillicfonttt{Courier New}[Scale=0.9]
+    }%
+}%
 
 % Шрифты для кириллицы (требуется для polyglossia)
 \newfontfamily\cyrillicfont{PT Serif}[Ligatures=TeX]
 \newfontfamily\cyrillicfontsf{PT Sans}[Ligatures=TeX,Scale=0.95]
-\newfontfamily\cyrillicfonttt{JetBrains Mono}[Scale=0.85]
 
 % =============================================================================
 % МЕТАДАННЫЕ ДОКУМЕНТА
@@ -160,19 +169,26 @@
 % КОЛОНТИТУЛЫ
 % =============================================================================
 
+\newcommand{\toclink}{\hyperlink{toc}{Назад к содержанию}}
+
 \pagestyle{fancy}
 \fancyhf{}
 \fancyhead[L]{\small\color{secondary}\coursename}
-\fancyhead[R]{\small\color{secondary}\leftmark}
-\fancyfoot[C]{\small\color{secondary}\thepage}
+\fancyhead[R]{\small\color{accent}\toclink}
+\fancyfoot[L]{\small\color{secondary}ФПМИ МФТИ, \semester}
+\fancyfoot[R]{\small\color{secondary}\thepage}
 \renewcommand{\headrulewidth}{0.4pt}
-\renewcommand{\footrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0.4pt}
 \renewcommand{\headrule}{{\color{rule}\hrule width\headwidth height\headrulewidth}}
+\renewcommand{\footrule}{{\color{rule}\hrule width\headwidth height\footrulewidth}}
 
 \fancypagestyle{plain}{%
     \fancyhf{}
-    \fancyfoot[C]{\small\color{secondary}\thepage}
+    \fancyfoot[L]{\small\color{secondary}ФПМИ МФТИ, \semester}
+    \fancyfoot[R]{\small\color{secondary}\thepage}
     \renewcommand{\headrulewidth}{0pt}
+    \renewcommand{\footrulewidth}{0.4pt}
+    \renewcommand{\footrule}{{\color{rule}\hrule width\headwidth height\footrulewidth}}
 }
 
 % =============================================================================
