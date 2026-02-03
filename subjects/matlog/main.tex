@@ -1,0 +1,50 @@
+% =============================================================================
+% КОНСПЕКТЫ ЛЕКЦИЙ
+% =============================================================================
+%
+% КОМПИЛЯЦИЯ:
+%   xelatex main.tex && xelatex main.tex
+%   или
+%   latexmk -xelatex main.tex
+%
+% СТРУКТУРА:
+%   main.tex          - главный файл (этот)
+%   style.sty         - стили и пакеты
+%   preamble/         - дополнительные настройки
+%     commands.tex    - быстрые команды для конспектов
+%   lectures/         - файлы лекций (lec-01.tex, lec-02.tex, ...)
+%
+% ДОБАВЛЕНИЕ ЛЕКЦИИ:
+%   1. Создайте файл lectures/lec-XX.tex
+%   2. Начните файл с \lecture{XX}{Название}
+%   3. Файл автоматически подключится при компиляции
+%
+% =============================================================================
+
+\documentclass[11pt, a4paper, oneside]{article}
+
+\usepackage{style}
+
+\setcoursename{MatLog}
+\setcoursesubtitle{Конспекты лекций}
+\setstudentname{Антон Пумпеликсов}
+\setteachername{Тюлень}
+\setinstitution{Московский Физико-Технический Институт}
+\setsemester{Осень 2025}
+
+\usepackage{catchfile}
+\newcommand{\includelectures}{%
+    \foreach \i in {1,...,99}{%
+        \edef\lecturefile{lectures/lec-\ifnum\i<10 0\fi\i.tex}%
+        \InputIfFileExists{\lecturefile}{}{}%
+    }%
+}
+
+\begin{document}
+\maketitlepage
+\hypertarget{toc}{}
+\tableofcontents
+\newpage
+\includelectures
+
+\end{document}

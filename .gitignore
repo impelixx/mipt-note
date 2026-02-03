@@ -327,3 +327,5 @@ TSWLatexianTemp*
 #*Notes.bib
 .vscode/
 .claude/
+!docs/cheatsheet/cheatsheet.pdf
+subjects/.DS_Store

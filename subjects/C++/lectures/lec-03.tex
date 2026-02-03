@@ -1,0 +1,110 @@
+\lecture{3}{На хор}
+
+\section{На хор}
+
+\subsection{Ключевые слова и примеры}
+\subsubsection{\texttt{static}}
+\subsubsection{\texttt{explicit}}
+\subsubsection{\texttt{mutable}}
+\subsubsection{\texttt{friend}}
+
+\subsection{Продвинутые шаблоны}
+\subsubsection{Три вида шаблонных параметров}
+\subsubsection{Перегрузка шаблонных функций}
+\subsubsection{Специализация шаблонных классов и функций}
+\subsubsection{Шаблонные аргументы по умолчанию}
+\subsubsection{Шаблонные параметры шаблонов}
+\subsubsection{Проблема зависимых имён (оба вида)}
+
+\subsection{Variadic templates и type traits}
+\subsubsection{Синтаксис и примеры}
+\subsubsection{Оператор \texttt{sizeof...}}
+\subsubsection{Базовые type-traits: \texttt{is\_same}, \texttt{remove\_const}}
+\subsubsection{Type-traits с variadic: \texttt{is\_same\_many}}
+
+\subsection{Продвинутое наследование}
+\subsubsection{Private, public, protected наследование}
+\subsubsection{Видимость/доступность полей и методов}
+\subsubsection{Влияние \texttt{friend} при наследовании}
+\subsubsection{Приведение типов при всех типах наследования}
+\subsubsection{Множественное наследование}
+\subsubsection{Проблема ромба}
+\subsubsection{Расположение объектов в памяти}
+\subsubsection{Ошибки: \textquotedblleft ambiguous base\textquotedblright, \textquotedblleft warning: inaccessible base class\textquotedblright}
+
+\subsection{Виртуальные приколы}
+\subsubsection{Аргументы по умолчанию в виртуальных функциях}
+\subsubsection{Вызов чисто виртуальных функций}
+\subsubsection{Приведение типов в рантайме: \texttt{dynamic\_cast}}
+\subsubsection{\texttt{override} и \texttt{final}}
+
+\subsection{Продвинутые лямбды}
+\subsubsection{Список захвата}
+\subsubsection{Захват с инициализацией}
+\subsubsection{Захват полей класса и \texttt{this}}
+\subsubsection{Захват по умолчанию}
+\subsubsection{Лямбды как объекты}
+\subsubsection{\texttt{std::function}: идея и пример использования}
+
+\subsection{Продвинутые исключения}
+\subsubsection{Проблема исключений в конструкторах/деструкторах}
+\subsubsection{Идиома RAII}
+\subsubsection{Спецификация исключений и \texttt{noexcept}}
+\subsubsection{Оператор \texttt{noexcept}}
+\subsubsection{Стандартная иерархия исключений}
+\subsubsection{Кастомные исключения}
+\subsubsection{Приведение типов внутри \texttt{catch}}
+
+\subsection{Итераторы}
+\subsubsection{\texttt{std::iterator\_traits}}
+\subsubsection{\texttt{std::advance}: реализация}
+\subsubsection{const и reverse итераторы}
+\subsubsection{\texttt{std::copy}, \texttt{std::copy\_if}}
+\subsubsection{output итераторы и адаптеры}
+\subsubsection{stream итераторы}
+\subsubsection{Итератор для вектора: псевдокод}
+
+\subsection{Инвалидация ссылок/итераторов и устройство контейнеров}
+\subsubsection{Инвалидация в стандартных контейнерах}
+\subsubsection{Подробное устройство \texttt{std::deque}, \texttt{std::list}, \texttt{std::unordered\_map}}
+
+\subsection{Продвинутая память}
+\subsubsection{Перегрузка операторов \texttt{new} и \texttt{delete}}
+\subsubsection{Placement new}
+\subsubsection{Идея аллокаторов}
+\subsubsection{Аллокаторы в \texttt{vector}}
+\subsubsection{\texttt{std::allocator} и его методы}
+\subsubsection{\texttt{std::allocator\_traits}}
+\subsubsection{Реализация \texttt{resize} вектора}
+
+\subsection{Категории значений}
+\subsubsection{Наивное определение lvalue/rvalue: контрпримеры}
+\subsubsection{Правильное определение lvalue/rvalue}
+\subsubsection{rvalue-ссылки и правила их инициализации}
+\subsubsection{Правила присваивания rvalue-ссылок}
+\subsubsection{RVO и copy-elision: примеры}
+\subsubsection{Reference qualifiers}
+
+\subsection{Универсальные ссылки и \texttt{std::move}}
+\subsubsection{Правила вывода шаблонов для универсальных ссылок}
+\subsubsection{Реализация \texttt{std::move}}
+
+\subsection{Perfect forwarding}
+\subsubsection{Описание проблемы}
+\subsubsection{\texttt{std::forward}: пример использования}
+\subsubsection{Правильная реализация \texttt{emplace\_back} и \texttt{resize} вектора}
+
+\subsection{\texttt{shared\_ptr} и сопутствующее}
+\subsubsection{Идея реализации \texttt{shared\_ptr} (с \texttt{weak\_ptr})}
+\subsubsection{\texttt{make\_shared}, \texttt{make\_unique}: пользование и реализация}
+
+\subsection{SFINAE и проверка наличия метода}
+\subsubsection{Идея SFINAE, простейший пример}
+\subsubsection{\texttt{std::enable\_if}: реализация и использование}
+\subsubsection{Проверка наличия метода в классе: идея реализации}
+
+\subsection{requires и концепты}
+\subsubsection{Ограничения через SFINAE-характеристики}
+\subsubsection{Сложные ограничения}
+\subsubsection{Концепты: примеры и сокращённый синтаксис}
+\subsubsection{Вложение концептов: простой пример}

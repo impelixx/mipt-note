@@ -1,0 +1,620 @@
+\lecture{1}{Фундамент}
+
+\section{Фундамент}
+\subsection{1 Вопрос}
+\subsubsection{Компилируемость/интерпретируемость}
+\begin{definition}{Компилируемость(из википедии)}{}
+\textbf{Компилируемый язык программирования} — язык программирования, исходный код которого преобразуется компилятором в машинный код и записывается в файл с особым заголовком и/или расширением для последующей идентификации этого файла, как исполняемого операционной системой.
+\end{definition}
+\begin{definition}{Интерпретируемость}{}
+\textbf{Интерпретируемый язык программирования} — язык программирования, исходный код которого выполняется интерпретатором, он берет оператор, транслирует его в машинный код, и выполняет его.
+\end{definition}
+\textbf{Сравнение}
+\begin{itemize}
+    \item Компилируемые языки обычно быстрее, так как не весь код уже переведен в бинарный и не надо тратить время на его компиляцию.
+    \item Интерпретируемые языки более гибкие, так как можно изменять код во время выполнения программы, если мы еще не дошли до этой части.
+    \item Компилируемые языки требуют этапа компиляции, что может занимать длительное время.
+    \item Интерпретируемые языки позволяют легче отлаживать код, так как ошибки возникают во время выполнения(могут не возникнуть если мы не дойдем до части, где она допущена).
+\end{itemize}
+\subsubsection{Заголовочные файлы и их подключение}
+\begin{definition}{Заголовочный файл}{}
+  \textbf{Заголовочный файл в С++} --- это файлы с объявлением классов и их методов. Они подставляются на этапе прекомпиляции в основной файл с помощью директивы \texttt{\#include}. Для подстановки системных заголовков используется \verb|<>|, для пользовательских --- \verb|""|.
+\end{definition}
+Директивы в исходном файле сообщают препроцессору о выполнении определенных действий
+\begin{implementation}{Пример подключения заголовочного файла}{}
+\begin{lstlisting}[language=c++]
+#include <iostream>
+#include "myheader.h"
+\end{lstlisting}
+\end{implementation}
+\subsubsection{Переменные: объявление, использование, хранение}
+\begin{definition}{Переменная}{}
+\textbf{Переменная} --- это, по сути, просто фрагмент памяти, зарезервированный для использования программой. Вы обращаетесь к ней, используя имя переменной, поэтому вам не нужно беспокоиться о её местоположении в памяти (хотя вы можете узнать её адрес в памяти и даже указать её местоположение, если захотите). Система типов C++ отслеживает размер блока памяти и интерпретацию значения в нём (то есть, она будет знать, 65относится ли значение в определённом блоке памяти к числу 65 , букве ' A' (код ASCII/Unicode для символа 'A' — 65), или даже к комплексному числу с действительной частью 6 и мнимой частью 5 ).
+Чтобы создать переменную в C++, вам нужны как минимум две вещи: \textbf{имя и тип}.
+\end{definition}
+\begin{definition}{идентификаторы}{}
+  \textbf{Имена переменных} — это идентификаторы. Они используются для обозначения разных сущностей в C++: функций, классов, пространств имён и переменных.
+Имя идентификатора может содержать символы a-z, A-Z, 0-9 и \_, не начинаться с цифры или \_, и не быть ключевым словом. Есть и другие правила.
+Обычно идентификаторы не сохраняются в итоговой программе (если не используются настройки отладки), поэтому длина имени не влияет на размер программы.
+\end{definition}
+\begin{definition}{Type}{}
+  C++ — строго типизированный язык: если переменная объявлена как целое число, она им и останется, в отличие от слабо типизированных языков (например, JavaScript).
+\end{definition}
+\begin{implementation}{Использование переменных}{}
+\begin{lstlisting}[language=C++]
+#include <iostream>
+
+int main() {
+    int v1 = 42;
+    std::cout << v1 << '\n';
+    v1 = 69;
+    std::cout << v1 << '\n';
+    double temp_in_F = 72;
+    double temp_in_C = (temp_in_F - 32) / 1.8;
+    std::cout << temp_in_F << "degrees Fahrenheit is " <<
+               temp_in_C << "degrees Celsius " << '\n';
+
+    temp_in_F = 95.5;
+    temp_in_C = (temp_in_F - 32) / 1.8;
+    std::cout << temp_in_F << "degrees Fahrenheit is " <<
+               temp_in_C << "degrees Celsius " << '\n';
+
+    return 0;
+}
+\end{lstlisting}
+\end{implementation}
+\subsubsection*{auto}
+Подробнее в \ref{auto}
+\subsubsection{Работа с потоком ввода/вывода}
+\begin{definition}{Поток ввода/вывода}{}
+  Это стандартные потоки(смотри конспект по тулзам), такие как STDIN, STDOUT и STDERR. В С++ для работы с ними используется библиотека iostream, которая предоставляет объекты \texttt{std::cin}, \texttt{std::cout} и \texttt{std::cerr} соответственно. Операторы \texttt{$<<$} и \texttt{$>>$}
+\end{definition}
+Виды манипуляторов с выводом:
+\begin{itemize}
+  \item \texttt{std::endl} --- перевод строки и сброс буфера
+  \item \texttt{std::flush} --- сброс буфера
+  \item \texttt{std::setw(n)} --- установка ширины поля вывода
+  \item \texttt{std::setprecision(n)} --- установка точности вывода для чисел с плавающей точкой
+  \item \texttt{std::fixed} --- вывод чисел с плавающей точкой в фиксированном формате
+  \item \texttt{std::scientific} --- вывод чисел с плавающей точкой в научном формате
+  \item \texttt{std::hex}, \texttt{std::dec}, \texttt{std::oct} --- установка системы счисления для вывода целых чисел
+  \item \texttt{std::boolalpha}, \texttt{std::noboolalpha} --- вывод булевых значений как \texttt{true}/\texttt{false} или \texttt{1}/\texttt{0}
+\end{itemize}
+\subsubsection{Статическая/динамическая типизация}
+\begin{definition}{Статическая типизация}{}
+\textbf{Статическая типизация} --- переменная, параметр подпрограммы, возвращаемое значение функции связывается с типом в момент объявления и тип не может быть изменён позже (переменная или параметр будут принимать, а функция — возвращать значения только этого типа).
+\end{definition}
+\begin{definition}{Динамическая типизация}{}
+\textbf{Динамическая типизация} --- переменная связывается с типом в момент присваивания значения, а не в момент объявления переменной. Таким образом, в различных участках программы одна и та же переменная может принимать значения разных типов.
+\end{definition}
+\textbf{Сильная и слабая типизация}
+\textbf{Кратко:} при слабой типизации тип можно например привести один к другому. При сильной нет.
+\textbf{Некратко:}
+\begin{itemize}
+  \item \textbf{Сильная типизация:}
+    система типов языка программирования не допускает неявного преобразования одного типа к другому.
+    Любое приведение типов должно быть явно указано программистом.
+  \item \textbf{Слабая типизация:}
+    язык позволяет неявные преобразования между различными типами.
+    Тип одной переменной можно, например, автоматически привести к другому типу.
+\end{itemize}
+\subsubsection{Основные типы и операции над ними}
+\textbf{ТИПЫ В С++}
+\begin{itemize}
+  \item \textbf{Знаковые целые}, как минимум, может хранить от $-(2^{15} -1)$ до $(2^{15} -1).$ Обычно это \texttt{int}, \texttt{short}, \texttt{long}, \texttt{long long}.
+  \item \textbf{Беззнаковые целые}, как минимум, может хранить от $0$ до $2^{16} -1.$ Обычно это \texttt{unsigned int}, \texttt{unsigned short}, \texttt{unsigned long}, \texttt{unsigned long long}.
+  \item \textbf{Символьные типы} хранят буквы, цифры, знаки препинания и управляющие коды. Обычно это \texttt{char}, \texttt{wchar\_t}, \texttt{char16\_t}, \texttt{char32\_t}.
+  \item \textbf{Типы с плавающей точкой} хранения вещественных чисел в виде мантиссы и экспоненты; могут хранить очень большие и очень маленькие значения
+\end{itemize}
+Пример хранения float в памяти:
+\usetikzlibrary{chains, decorations.pathreplacing}
+\begin{figure}[htp]
+
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+  font=\sffamily,
+  node distance=0cm,
+  start chain=chain-1 going right,
+  box/.style={
+    draw, minimum width=0.5cm, minimum height=0.6cm,
+    outer sep=0pt, on chain=chain-1, font=\small\bfseries
+  }
+]
+
+  % Title
+  \node[anchor=south, font=\bfseries] at (8, 0.8) {FLOATING POINT FORMAT IEEE-754, 32 BITS};
+
+  % Colors based on the image (Byte-aligned coloring)
+  \definecolor{cSign}{RGB}{130,130,210}   % Dark Blue
+  \definecolor{cByte1}{RGB}{180,180,230}  % Light Blue
+  \definecolor{cByte2}{RGB}{255,255,100}  % Yellow
+  \definecolor{cByte3}{RGB}{230,80,60}    % Red
+  \definecolor{cByte4}{RGB}{100,230,100}  % Green
+
+  % MSB Label
+  \node[anchor=south west] at (-0.2, 0.6) {\textbf{MSB}};
+
+  % --- BITS (Hex: C3 78 C0 00) ---
+
+  % Byte 1: C3 -> 1 1000011
+  \node [box, fill=cSign] (bit31) {1}; % Sign bit
+  \node [box, fill=cByte4] {1};
+  \node [box, fill=cByte4] {0};
+  \node [box, fill=cByte4] {0};
+  \node [box, fill=cByte4] {0};
+  \node [box, fill=cByte4] {0};
+  \node [box, fill=cByte4] {1};
+  \node [box, fill=cByte4] {1};
+
+  % Byte 2: 78 -> 01111000
+  \node [box, fill=cByte4] {0};
+  \node [box, fill=cByte3] {1};
+  \node [box, fill=cByte3] {1};
+  \node [box, fill=cByte3] {1};
+  \node [box, fill=cByte3] {1};
+  \node [box, fill=cByte3] {0};
+  \node [box, fill=cByte3] {0};
+  \node [box, fill=cByte3] {0};
+
+  % Byte 3: C0 -> 11000000
+  \node [box, fill=cByte3] {1};
+  \node [box, fill=cByte3] {1};
+  \node [box, fill=cByte3] {0};
+  \node [box, fill=cByte3] {0};
+  \node [box, fill=cByte3] {0};
+  \node [box, fill=cByte3] {0};
+  \node [box, fill=cByte3] {0};
+  \node [box, fill=cByte3] {0};
+
+  % Byte 4: 00 -> 00000000
+  \node [box, fill=cByte3] {0};
+  \node [box, fill=cByte3] {0};
+  \node [box, fill=cByte3] {0};
+  \node [box, fill=cByte3] {0};
+  \node [box, fill=cByte3] {0};
+  \node [box, fill=cByte3] {0};
+  \node [box, fill=cByte3] {0};
+  \node [box, fill=cByte3] {0};
+
+  % LSB Label
+  \node[anchor=south east] at (chain-1-32.north east) {\textbf{LSB}};
+
+  % --- BRACES ---
+  % Exponent: Bits 30-23 (Indices 2 to 9 in chain)
+  \draw[decorate, decoration={brace, amplitude=5pt, mirror}, thick]
+    (chain-1-2.south west) -- (chain-1-9.south east)
+    node[midway, below=10pt, align=center, font=\bfseries\footnotesize] {EXPONENT\\8 BITS};
+
+  % Mantissa: Bits 22-0 (Indices 10 to 32 in chain)
+  \draw[decorate, decoration={brace, amplitude=5pt, mirror}, thick]
+    (chain-1-10.south west) -- (chain-1-32.south east)
+    node[midway, below=10pt, align=center, font=\bfseries\footnotesize] {MANTISSA\\23 BITS};
+
+  % --- ANNOTATIONS ---
+  % Sign Bit Arrow
+  \draw[<-, thick] (bit31.south) -- ++(0,-1.8)
+    node[below, align=left, font=\bfseries\footnotesize, anchor=north] (signtext) {SIGN BIT\\1= NEGATIVE\\0=POSITIVE};
+
+  % Example Text
+  \node[right=3cm of signtext.north, anchor=north west, align=left, font=\bfseries] {
+    EXAMPLE: -248.75\\
+    HEXADECIMAL: C3 78 C0 00
+  };
+
+\end{tikzpicture}
+}
+\end{figure}
+\textbf{ОПЕРАЦИИ НАД ТИПАМИ}
+\begin{itemize}
+  \item арифметические операции +, -, *, /, \, \%
+  \item побитовые операции \texttt{\&}, \texttt{|}, \texttt{\^{}}, \texttt{<<}, \texttt{>>}
+  \item логические операции \texttt{\&\&}, \texttt{||}
+\end{itemize}
+\subsubsection{Литералы и идентификаторы}
+\begin{definition}{Примеры литералов}{}
+\begin{itemize}
+  \item \texttt{5} --- целочисленный литерал (\texttt{int})
+  \item \texttt{5.0} --- литерал с плавающей точкой двойной точности (\texttt{double})
+  \item \texttt{5.0f} --- литерал с плавающей точкой (\texttt{float})
+  \item \texttt{'a'} --- символьный литерал (\texttt{char})
+  \item \texttt{"aaa"} --- строковый литерал (\texttt{const char*})
+  \item \texttt{true} --- булевый литерал (\texttt{bool}), является ключевым словом
+\end{itemize}
+\end{definition}
+
+\begin{definition}{Примеры идентификаторов}{}
+\begin{itemize}
+  \item \texttt{x}
+  \item \texttt{CoOlFuNcTiOnNaMe}
+  \item \texttt{} --- эмоджи. \textit{Примечание: поддерживаются далеко не всеми компиляторами (например, Clang не поддерживает), хотя стандарт допускает использование Unicode в идентификаторах(а латех нет).}
+\end{itemize}
+\end{definition}
+\subsubsection{Объявления и определения}
+\begin{definition}{Объявление}{}
+\textbf{Объявление} ---  введение какой-то новой сущности
+\end{definition}
+\begin{implementation}
+{Пример объявления}{}
+\begin{lstlisting}[language=C++]
+  int a;
+  int b = 10;
+\end{lstlisting}
+\end{implementation}
+\begin{definition}
+{Определение}{}
+\textbf{Определение} --- выделение памяти для сущности
+\end{definition}
+\begin{implementation}
+{Пример определения}{}
+\begin{lstlisting}[language=C++]
+  int a;
+  int b = 10;
+
+  double f(int a);
+
+  int main() {
+    f(1);
+  }
+\end{lstlisting}
+Такой код не скомпилируется, потому что мы объявили функцию f но не определили ее.
+\end{implementation}
+\textbf{Замечание:} Каждое определение является объявлением
+\subsubsection{Области видимости}
+
+\begin{itemize}
+  \item \textbf{Глобальная область видимости}: переменные, объявленные вне функций и классов, доступны во всей программе, начиная с точки объявления.
+  \item \textbf{Локальная область видимости}: переменные, объявленные внутри функций или блоков кода \verb|{}|, доступны только в рамках этого блока.
+  \item \textbf{Вложенные области видимости}: внутри одной области могут быть созданы другие области с помощью блоков \verb|{}|. Внутри вложенной области можно объявлять переменные с теми же именами, что и во внешней.
+  \item \textbf{Глобальный доступ}: к переменным глобальной области видимости изнутри функций можно обратиться с помощью оператора \verb|::|.
+  \item \textbf{Namespace (пространства имён)}: используется для разделения областей видимости между разными логическими частями кода.
+  \item \textbf{Использование namespace}:
+    \begin{itemize}
+        \item Объявить: \verb|namespace N { int x = 10; }|
+        \item Использовать: \verb|N::x|
+        \item Ввести переменные из namespace: \verb|using N::x;|
+        \item Ввести всё пространство имён: \verb|using namespace std;|
+    \end{itemize}
+\end{itemize}
+
+\begin{lstlisting}[language=C++]
+int x = 10;
+int main() {
+    int x = 5;
+    {
+        int x = 3;
+        std::cout << ::x;
+    }
+}
+\end{lstlisting}
+
+\textbf{Смертельно опасно:} нельзя объявлять две переменные с одинаковым именем в одной области видимости!
+
+\subsubsection{Выражения и операторы}
+
+\textbf{Выражение}~--- комбинация идентификаторов, литералов и операторов, которая вычисляется в программе.
+
+\begin{itemize}
+  \item Примеры выражений:
+    \begin{itemize}
+      \item \verb|a + 5|
+      \item \verb|(--a * b << 3) + 1|
+    \end{itemize}
+\end{itemize}
+
+\textbf{Операторы}
+\begin{itemize}
+  \item \textbf{Арифметические:} \verb|+, -, *, /, %|, унарный \verb|+|, унарный \verb|-|
+  \item \textbf{Побитовые:} \verb!&, |, ^! (XOR), \verb!~! (побитовое НЕ), \verb!<<, >>!
+  \item \textbf{Сравнения:} \verb|==, !=, <, >, <=, >=, <=>| (C++20 spaceship operator)
+  \item \textbf{Логические:} \verb+&&, ||, !+
+\end{itemize}
+
+\textbf{Примечания:}
+\begin{itemize}
+  \item Операторы могут вести себя по-разному в зависимости от типа аргументов: например, \verb|<<| для чисел~--- это побитовый сдвиг, а для \verb|std::cout|~--- вывод в поток.
+  \item Логические операторы \verb|&&| и \verb||| реализуют \textit{ленивые вычисления}~--- выражение справа вычисляется только если нужно.
+  \item \textbf{Инкремент и декремент:} \verb|++| и \verb|--|. Префиксный и постфиксный варианты отличаются тем, что (\verb|++x|) сначала увеличивает значение, а (\verb|x++|)~--- сначала возвращает старое, а затем увеличивает.
+\end{itemize}
+
+\begin{lstlisting}[language=C++]
+int main() {
+    int x = 10;
+    std::cout << ++x;   // 11
+    std::cout << x;     // 11
+
+    int y = 10;
+    std::cout << y++;   // 10
+    std::cout << y;     // 11
+}
+\end{lstlisting}
+
+\textbf{Важно:} логические операторы часто используются для безопасных проверок.
+\subsubsection{Ленивые вычисления}
+\begin{definition}
+{Ленивые вычисления}{}
+Логические операторы \texttt{\&\&} и \texttt{||} не вычисляют лишнего.
+В выражении вида \texttt{(expr1 \&\& expr2)} если \texttt{expr1} при вычислении дает \texttt{false}, то \texttt{expr2} даже не вычисляется. Аналогично с \texttt{||}.
+Это нужно например для следущих конструкций: \texttt{if (vector.size() > 0 \&\& vector[0] == 10)} (если бы правило не выполнялось, то мы бы попали в UB).
+\end{definition}
+\subsubsection{Тернарный оператор}
+\begin{definition}{Тернарный оператор}{}
+Тернарный оператор \texttt{?:} единственный оператор в языке который принимает 3 аргументах. \newline
+Синтаксис: \texttt{condition ? expr1 : expr2}
+Если \texttt{condition} истинно, то возвращается значение \texttt{expr1}, иначе \texttt{expr2}.
+\end{definition}
+\subsubsection{Приоритет вызова операторов}
+\begin{center}
+\begin{tabular}{|c|l|l|c|}
+\hline
+\textbf{Приоритет} & \textbf{Оператор} & \textbf{Описание} & \textbf{Ассоциативность} \\
+\hline
+1 & \texttt{::} & Разрешение области видимости & Слева направо \\
+\hline
+2 & \texttt{++ --} & Постфиксный инкремент/декремент & Слева направо \\
+  & \texttt{()} & Вызов функции & \\
+  & \texttt{[]} & Индекс массива & \\
+  & \texttt{.} \texttt{->} & Доступ к члену & \\
+\hline
+3 & \texttt{++ --} & Префиксный инкремент/декремент & \textbf{Справа налево} \\
+  & \texttt{+ -} & Унарный плюс/минус & \\
+  & \texttt{! \~} & Логическое/Побитовое НЕ & \\
+  & \texttt{(type)} & Приведение типа (C-style) & \\
+  & \texttt{* \&} & Разыменование / Взятие адреса & \\
+  & \texttt{sizeof} & Размер типа & \\
+  & \texttt{new delete} & Выделение/освобождение памяти & \\
+\hline
+4 & \texttt{.* ->*} & Доступ к члену по указателю & Слева направо \\
+\hline
+5 & \texttt{* / \%} & Умножение, деление, остаток & Слева направо \\
+\hline
+6 & \texttt{+ -} & Сложение, вычитание & Слева направо \\
+\hline
+7 & \texttt{<< >>} & Побитовый сдвиг & Слева направо \\
+\hline
+8 & \texttt{<=>} & Трехстороннее сравнение (C++20) & Слева направо \\
+\hline
+9 & \texttt{< <= > >=} & Операторы сравнения & Слева направо \\
+\hline
+10 & \texttt{== !=} & Равенство / Неравенство & Слева направо \\
+\hline
+11 & \texttt{\&} & Побитовое И & Слева направо \\
+\hline
+12 & \texttt{\^} & Побитовое Исключающее ИЛИ (XOR) & Слева направо \\
+\hline
+13 & \texttt{|} & Побитовое ИЛИ & Слева направо \\
+\hline
+14 & \texttt{\&\&} & Логическое И & Слева направо \\
+\hline
+15 & \texttt{||} & Логическое ИЛИ & Слева направо \\
+\hline
+16 & \texttt{?:} & Тернарный условный оператор & \textbf{Справа налево} \\
+   & \texttt{= += -= ...} & Присваивание & \\
+   & \texttt{throw} & Генерация исключения & \\
+\hline
+17 & \texttt{,} & Запятая & Слева направо \\
+\hline
+\end{tabular}
+\end{center}
+\subsubsection{Управляющие конструкции}
+\begin{itemize}
+  \item \textbf{Условные операторы:}
+    \begin{itemize}
+      \item \verb|if (условие) { ... } else { ... }|
+      \item \verb|switch (выражение) { case ...: ... break; }|
+    \end{itemize}
+
+  \item \textbf{Циклы:}
+    \begin{itemize}
+      \item \verb|for (инициализация; условие; шаг) { ... }|
+      \item \verb|while (условие) { ... }|
+      \item \verb|do { ... } while (условие);|
+    \end{itemize}
+
+  \item \textbf{Операторы перехода:}
+    \begin{itemize}
+      \item \verb|break|~--- выход из цикла
+      \item \verb|continue|~--- переход к следующей итерации
+      \item \verb|return|~--- выход из функции и возврат значения
+    \end{itemize}
+\end{itemize}
+\subsubsection{Виды ошибок: UB,CE,RE}
+\textbf{CE (Compilation Error)}
+\begin{itemize}
+    \item лексические ошибки: \texttt{123bad456;}
+    \item синтаксические ошибки: \texttt{int + 5;}
+    \item семантические ошибки:
+    \begin{itemize}
+        \item undefined operation: \texttt{5.0 \% 0.5;}
+        \item ambiguous call
+        \item access error
+    \end{itemize}
+\end{itemize}
+
+\textbf{RE (Runtime Error)}\\
+Некоторые примеры:
+\begin{itemize}
+    \item Segmentation fault --- обращение к ``плохой'' памяти
+    \item Целочисленное деление на 0
+    \item Исключение, которое не поймали
+\end{itemize}
+
+\textbf{UB (Undefined Behaviour)}\\
+Иногда в стандарте написано, что компилятор ничего не гарантирует в данном случае. Примеры:
+\begin{itemize}
+    \item Вечный цикл
+    \item Обращение к элементу за границами массива
+    \item Переполнение знакового типа
+\end{itemize}
+
+Весёлый пример UB:
+\begin{lstlisting}[language=C++]
+int main() {
+    for (int i = 0; i < 300; ++i) {
+        std::cout << i << ' ' << i * 12345678 << std::endl;
+    }
+}
+\end{lstlisting}
+При компиляции с \texttt{-O2} получается вечный цикл.
+
+Почему так?\\
+Компилятор уверен, что \texttt{i * 12345678} не превосходит \texttt{max\_int} (иначе UB, и компилятор всё равно может делать что хочет). Тогда \texttt{i} не превосходит 173, а значит условие всегда true и его можно не проверять.
+
+\textbf{Бонус: unspecified behaviour:}
+\begin{lstlisting}[language=C++]
+int f() {
+    std::cout << 1;
+    return 1;
+}
+
+int g() {
+    std::cout << 2;
+    return 2;
+}
+
+int h() {
+    std::cout << 4;
+    return 3;
+}
+
+int main() {
+    std::cout << f() * g() + h();
+}
+\end{lstlisting}
+
+\newpage
+\subsection{Вопрос 2}
+\subsubsection{Указатели и виды памяти}
+\textbf{Концепция:} Основная концепция: мы хотим взаимодействовать с адресами наших переменных в памяти.
+\textbf{Замечание:} На самом деле мы не взаимодействуем с реальными адресами в оперативной памяти, так как операционная система выделяет нам некую виртуальную память.
+Переменные, очевидно, адресуются каким-то набором байт в памяти. Указатели позволяют нам хранить эти адреса и работать с ними.
+\begin{definition}
+{Оператор \&}{}
+Оператор \& это унарный оператор, который возвращает адрес объекта. Этот адрес имеет специальный тип \texttt{(}для типа T это T* \texttt{)}. Этот тип называется "указатель*
+\end{definition}
+\subsubsection{Операции над указателями}
+\begin{definition}
+{Оператор \&}{}
+Оператор \& это унарный оператор, который возвращает адрес объекта. Этот адрес имеет специальный тип \texttt{(}для типа T это T* \texttt{)}. Этот тип называется "указатель*
+\end{definition}
+\begin{definition}
+{Оператор разыменования *}{}
+Оператор * это унарный оператор, который по адресу объекта возвращает его значение. Эта операция называется "разыменование"
+\end{definition}
+\textbf{Особые указатели:}
+\begin{itemize}
+  \item nullptr - нулевой указатель. В C был NULL (просто int равный 0), но в c++ мы будем пользоваться именно nullptr, так как он имеет нужный тип (указатель)
+  \item void* - указатель "на что угодно". Нужен когда работает с "сырой" памятью и не знаем какого типа она на самом деле
+\end{itemize}
+\subsubsection{Операции над указателями}
+К указателям применимы следующие операции:
+\begin{itemize}
+  \item  ++ и -- (инкремент и декремент). Сдвигает указатель на число байт равное размеру типа. То есть если был указатель T* ptr. то ++ptr сдвинет указатель на sizeof(T)
+  \item +n и -n, где n это какое-то число (инкремент/декремент n раз)
+  \item a - b, где a и b это указатели. Это количество "шагов" между указателями (где каждый шаг это sizeof(T))
+\end{itemize}
+\newpage
+\subsubsection{Переполнение стека}
+Для начала устройство памяти
+\begin{figure}[htp]
+    \centering
+    \includegraphics[width=15cm, ]{mem.png}
+    \caption{Структура виртуальной памяти процесса из презентации}
+\end{figure}
+\newpage
+\textbf{Кратко:}
+\begin{itemize}
+  \item data (статическая память). В этой секции лежат статические и глобальные переменные, а так же некоторые константы
+\item text. В этом секции лежит машинный код
+  \item stack (автоматическая память). Тут лежат локальные переменные и адреса возвратов
+\end{itemize}
+\textbf{Переполнение стека}
+\begin{enumerate}
+  \item Когда мы создаем какую-либо локальную переменную она кладется на стек. При выходе из области видимости эта переменная удалится со стека (снимется)
+  \item На стек кладется адрес возврата, когда мы заходим в какую-либо функцию (иначе непонятно куда возвращаться после return в функции)
+  \item Stack overflow (переполнение стека) - ситуация, когда пытаемся на стеке занять больше памяти чем есть (достаточно глубокая рекурсия)
+\end{enumerate}
+Размер стэка обычно ограничен 4мя или 8ю мегабайтами памяти
+\subsubsection{Статические переменные}
+Статические переменные:
+Такую переменную можно завести не только внутри функции:
+\begin{lstlisting}[language=C++]
+int foo() {
+  static int x = 0;
+}
+\end{lstlisting}
+\textbf{Особенность:} Эта переменная инициализируется только один раз (при первом заходе в функцию). \newline
+Тогда эта переменная будет храниться в секции data и будет одинаковой для всех вызовов функции
+\subsubsection{Операторы new/delete}
+\begin{definition}{Динамическая память}{}
+\textbf{Динамическая память} --- оперативная память из которой мы можем запрашивать кусочки. Эта память так же называется куча.
+\end{definition}
+\textbf{Оператор new}
+Для выделения динамической памяти в плюсах служит оператор new. Его синтаксис: T* p = new T(...);
+Выделим памяти на один int:
+int* a = new int;
+
+Теперь у нас есть 4 байта на куче. Можно было сразу проинициализировать на 10 элементов:
+int* a = new int(10);
+\newline
+\textbf{Оператор delete}
+Память, выделнную с помощью оператора new нужно "очищать". Для этого нужен оператор delete:
+\begin{lstlisting}[language=C++]
+int* a = new int(10);
+delete a;
+\end{lstlisting}
+\textbf{Замечание: }после завершения программы вся память и так очистится, но вы много раз будете сталкиваться с ситуацией, когда память нужно очищать прямо во время работы программы
+
+\subsubsection{Проблемы с памятью: memory leak и double free}
+\begin{definition}{Memory leak}{}
+\textbf{Memory leak} --- ситуация, когда мы выделили память с помощью new, но забыли ее удалить с помощью delete. В этом случае память остается занятой до завершения программы.
+\end{definition}
+\begin{definition}
+{Double free}{}
+\textbf{Double free} --- ситуация, когда мы пытаемся удалить память с помощью delete дважды, но после первого удаления, память уже не наша и мы лезем в чужую память. Это RE.
+\end{definition}
+\subsubsection{Массивы и операции над ними}
+Для выделения массива служит другая версия оператора new: new int[size].
+\begin{lstlisting}[language=C++]
+int* arr = new int[10]; // Выделили массив из 10ти int
+sizeof(arr); //  4 байта / 8  байт sizeof(int)
+\end{lstlisting}
+Указатель arr указывает на первый int в нашем массиве из 10ти интов и мы можем удобно работать с этой памятью:
+\begin{lstlisting}[language=C++]
+  for (int i = 0; i < 10; ++i) {
+    arr[i] = i + 1;
+  }
+\end{lstlisting}
+\textbf{Очистка}
+\begin{lstlisting}[language=C++]
+  delete[] arr;
+\end{lstlisting}
+\textbf{Важно:} Очищать память с помощью delete[] которая была выделена не с помощью new[] нельзя. Очищать память с помощью delete которая была выделена с помощью new[] тоже нельзя.
+\textbf{СИшные массивы}
+\begin{lstlisting}[language=C++]
+  int arr[10]; // Массив из 10ти int на стеке
+  for (int i = 0; i < 10; ++i) {
+    arr[i] = i + 1;
+  }
+  sizeof(arr) // 40 байт (если int это 4 байта)
+  int arr1[10];
+  int arr2[10];
+  arr1 = arr2; // CE
+\end{lstlisting}
+\newpage
+\subsection{Вопрос 3}
+\subsubsection{Базовый синтаксис функций}
+\subsubsection{Аргументы по умолчанию}
+\subsubsection{Перегрузка функций: простые примеры}
+\subsubsection{Правила выбора перегрузки (базовое понимание)}
+\newpage
+\subsection{Вопрос 4}
+\subsubsection{Ссылки}
+\subsubsection{Константы}
+\subsubsection{Навешиваниие констант на указатели и ссылки}
+\subsection{Вопрос 5}
+\subsubsection{Абстракция, инкапсуляция, наследование, полиморфизм}
+\subsubsection{Классы, объекты, члены классов, поля, методы}
+\subsubsection{Операторы . , -> , ключевое слово this}
+\subsection{Вопрос 6}
+\subsubsection{Перечисления (enum): примеры и как с ними работать}
+% --- Раздел: Вопросы на уд ---

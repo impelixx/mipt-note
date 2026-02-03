@@ -1,0 +1,66 @@
+\lecture{4}{На отл(8-9)}
+
+\section{На отл(8-9)}
+
+\subsection{Шаблоны для компилятора}
+\subsubsection{Инстанцирование шаблонов}
+\subsubsection{Правила вывода шаблонных типов}
+\subsubsection{Вычисления на шаблонах: Фибоначчи, проверка простоты}
+\subsubsection{Fold-expressions: 4 вида, синтаксис, раскрытие}
+\subsubsection{Пример: \texttt{print} от переменного числа аргументов}
+\subsubsection{Метафункции с fold: все типы одинаковы и т.п.}
+
+\subsection{Виртуальное наследование}
+\subsubsection{Расположение объектов в памяти}
+\subsubsection{Устройство виртуального наследования (точка зрения компилятора)}
+\subsubsection{Устройство виртуальных функций}
+\subsubsection{Случай с множественным наследованием}
+
+\subsection{Аллокаторы: нюансы}
+\subsubsection{\texttt{propagate\_on\_container\_copy\_assignment}}
+\subsubsection{\texttt{propagate\_on\_container\_move\_assignment}}
+\subsubsection{\texttt{select\_on\_container\_copy\_construction}}
+\subsubsection{Rebind аллокаторов}
+\subsubsection{Реализация: конструктор копирования, копирующее и перемещающее присваивание для \texttt{list}}
+
+\subsection{\texttt{std::forward}}
+\subsubsection{Реализация и детальный разбор всех случаев}
+
+\subsection{Вывод типов}
+\subsubsection{\texttt{decltype} и отличия от \texttt{auto}}
+\subsubsection{\texttt{decltype(auto)}}
+\subsubsection{\texttt{auto} в аргументах функции и шаблонных аргументах}
+\subsubsection{Structured bindings: как заставить работать со своим классом}
+\subsubsection{\texttt{std::tuple}: пользование и идея реализации}
+
+\subsection{Умные указатели и наследование}
+\subsubsection{Проблема указателя на наследника}
+\subsubsection{CRTP}
+\subsubsection{\texttt{enable\_shared\_from\_this}: реализация}
+\subsubsection{Проблема кастомных \texttt{deleter} и \texttt{allocator}}
+\subsubsection{Type-erasure, \texttt{std::any}: идея реализации}
+\subsubsection{Решение проблем с кастомными \texttt{deleter}/\texttt{allocator}}
+
+\subsection{Type-traits: конструктор по умолчанию}
+\subsubsection{\texttt{declval}}
+\subsubsection{\texttt{move\_if\_noexcept}: идея реализации}
+\subsubsection{\texttt{std::is\_base\_of}: реализация}
+
+\subsection{Union и вариантные типы}
+\subsubsection{Union}
+\subsubsection{SSO в \texttt{std::string} с помощью \texttt{union}}
+\subsubsection{\texttt{std::variant}: идея реализации}
+
+\subsection{Ranges}
+\subsubsection{Причины появления и примеры использования}
+\subsubsection{Концепт range}
+\subsubsection{\texttt{ranges::sort}}
+\subsubsection{\texttt{borrowed\_iterator}}
+\subsubsection{views, sentinel, \texttt{subrange} и \texttt{common\_view}}
+\subsubsection{Комбинация отображений}
+\subsubsection{Устройство \texttt{transform\_view}}
+
+\subsection{\texttt{constexpr}}
+\subsubsection{\texttt{constexpr} переменные}
+\subsubsection{\texttt{constexpr} функции}
+\subsubsection{\texttt{constexpr} в классах}

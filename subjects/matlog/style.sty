@@ -135,6 +135,7 @@
     \begin{titlepage}
         \newgeometry{top=4cm, bottom=3cm, left=3cm, right=3cm}
         \begin{center}
+            \includegraphics[height=2cm]{island.png}\\[0.6em]
             {\small\color{secondary}\institution}
 
             \vspace{0.3cm}
@@ -228,22 +229,7 @@
     \setcounter{section}{0}%
     \newpage
     \phantomsection
-    \addcontentsline{toc}{section}{Лекция #1. #2}
-    \markboth{Лекция #1}{Лекция #1}
-
-    \begin{center}
-        {\color{rule}\rule{2cm}{0.5pt}}
-        \vspace{0.5em}
-
-        {\Large\bfseries Лекция #1}
-
-        \vspace{0.3em}
-        {\large #2}
-
-        \vspace{0.5em}
-        {\color{rule}\rule{2cm}{0.5pt}}
-    \end{center}
-    \vspace{1em}
+    \addcontentsline{toc}{section}{#2}%
 }
 
 % Дата лекции

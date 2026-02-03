@@ -1,17 +1,7 @@
 #!/bin/bash
-# =============================================================================
-# Скрипт сборки всех предметов
-# =============================================================================
-#
-# Использование:
-#   ./scripts/build-all.sh          # Собрать все предметы
-#   ./scripts/build-all.sh matan    # Собрать только matan
-#
-# =============================================================================
-
 set -e
 
-# Цвета
+
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
@@ -21,6 +11,7 @@ NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 SUBJECTS_DIR="$ROOT_DIR/subjects"
+DOCS_DIR="$ROOT_DIR/docs"
 OUTPUT_DIR="$ROOT_DIR/output"
 
 mkdir -p "$OUTPUT_DIR"
@@ -37,12 +28,14 @@ build_subject() {
 
     cd "$subject_dir"
 
-    # Компиляция
-    if latexmk -xelatex -interaction=nonstopmode -quiet main.tex; then
+    # Два прохода: первый строит вспомогательные файлы, второй фиксит TOC
+    if xelatex -interaction=nonstopmode -halt-on-error main.tex > /dev/null 2>&1 \
+    && xelatex -interaction=nonstopmode -halt-on-error main.tex > /dev/null 2>&1; then
         cp main.pdf "$OUTPUT_DIR/${subject_name}.pdf"
         echo -e "${GREEN}  ✓ ${subject_name}.pdf${NC}"
     else
         echo -e "${RED}  ✗ Ошибка сборки${NC}"
+        xelatex -interaction=nonstopmode main.tex 2>&1 | grep -E "^!|Error" | head -5 | sed "s/^/    /"
         cd - > /dev/null
         return 1
     fi
@@ -60,7 +53,6 @@ SUCCESS=0
 FAILED=0
 
 if [ $# -ge 1 ]; then
-    # Собрать указанный предмет
     SUBJECT="$1"
     if [ -d "$SUBJECTS_DIR/$SUBJECT" ]; then
         if build_subject "$SUBJECTS_DIR/$SUBJECT"; then
@@ -73,10 +65,18 @@ if [ $# -ge 1 ]; then
         exit 1
     fi
 else
-    # Собрать все предметы
     for subject_dir in "$SUBJECTS_DIR"/*/; do
         if [ -d "$subject_dir" ]; then
             if build_subject "$subject_dir"; then
+                SUCCESS=$((SUCCESS + 1))
+            else
+                FAILED=$((FAILED + 1))
+            fi
+        fi
+    done
+    for doc_dir in "$DOCS_DIR"/*/; do
+        if [ -d "$doc_dir" ]; then
+            if build_subject "$doc_dir"; then
                 SUCCESS=$((SUCCESS + 1))
             else
                 FAILED=$((FAILED + 1))
