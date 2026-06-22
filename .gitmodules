@@ -1,0 +1,3 @@
+[submodule "lectures"]
+	path = lectures
+	url = https://gitlab.com/yaishenka/cpp_course.git

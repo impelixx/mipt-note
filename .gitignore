@@ -329,3 +329,4 @@ TSWLatexianTemp*
 .claude/
 !docs/cheatsheet/cheatsheet.pdf
 subjects/.DS_Store
+.DS_Store
