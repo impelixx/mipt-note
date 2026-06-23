@@ -1405,8 +1405,6 @@ int main() {
     boo(t);
 } // ~Test() вызовется один раз, когда t выйдет из области видимости
 \end{lstlisting}
-
-
 \end{implementation}
 \textbf{Замечание:} создавать \texttt{shared\_ptr} лучше через \texttt{std::make\_shared<T>(args...)}, а \texttt{unique\_ptr} --- через \texttt{std::make\_unique<T>(args...)}, а не через \texttt{shared\_ptr<T>(new T(...))} напрямую --- это и эффективнее (одна аллокация вместо двух для shared\_ptr), и безопаснее.
 \begin{definition}{std::weak\_ptr}{}
