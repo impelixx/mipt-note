@@ -558,7 +558,8 @@ double* b = reinterpret_cast<double*>(&a); // те же 4/8 байт, но "чи
 \end{center}
 \textbf{Правило:} нужно всегда выбирать самый "слабый" (специфичный) каст, который решает задачу --- это и явно говорит читателю кода о намерении, и не даёт компилятору молча сделать что-то более опасное, чем требовалось.
 
-\subsection{Шаблоны}
+\subsection{Шаблоны} \label{templates-basic}
+Это базовый билет про шаблоны: синтаксис, функции, классы и параметры-значения. Продолжение: перегрузка и специализация шаблонов --- в \ref{templates-advanced}, инстанцирование и вывод типов --- в \ref{templates-compiler}.
 \subsubsection{Основная идея и синтаксис}
 \textbf{Проблема:} нужна одна и та же логика для разных типов:
 \begin{lstlisting}[language=C++]
@@ -845,7 +846,8 @@ int main() {
 \end{definition}
 \textbf{Замечание:} LSP --- это буква L в принципах SOLID (наряду с SRP, OCP, ISP, DIP). К срезке это имеет прямое отношение: если из-за среза поведение Derived "ломается" до поведения голого Base, скорее всего иерархия спроектирована неудачно.
 
-\subsection{Динамический полиморфизм}
+\subsection{Динамический полиморфизм} \label{dynamic-polymorphism-basic}
+Это базовый билет про виртуальные функции: зачем нужен runtime dispatch, как работают абстрактные классы и почему важен виртуальный деструктор. Продвинутые ловушки --- в \ref{virtual-advanced}, устройство vtable и виртуального наследования --- в \ref{virtual-inheritance-and-vtable}.
 \subsubsection{Идея и простой пример}
 \begin{definition}{Полиморфизм}{}
 \textbf{Полиморфизм} --- способность за одним и тем же интерфейсом скрывать разные реализации, выбирая нужную для конкретного типа данных.
@@ -1127,6 +1129,43 @@ for (auto it = v.begin(); it != v.end(); ++it) {
   \item \textbf{Random access iterator} --- bidirectional + произвольный доступ за O(1): \texttt{it + n}, \texttt{it[n]}, \texttt{it1 - it2}; пример: \texttt{std::vector}, \texttt{std::deque}.
 \end{itemize}
 \textbf{Важно:} категория итератора --- это не отдельный класс, а набор гарантированных операций; чем "сильнее" категория, тем больше операций поддерживает итератор (random access поддерживает вообще всё, что input).
+
+\begin{figure}[htp]
+\centering
+\begin{tikzpicture}[
+  font=\small\sffamily,
+  tag/.style={draw, rounded corners=2pt, minimum width=6.2cm, minimum height=0.75cm, align=center, inner sep=4pt},
+  arr/.style={->, thick, >=stealth},
+  node distance=0.55cm and 1.2cm,
+]
+  \node[tag, fill=blue!10]   (input)  {\texttt{input\_iterator\_tag} --- чтение + \texttt{++}};
+  \node[tag, fill=blue!15, above=of input]   (forward) {\texttt{forward\_iterator\_tag} --- multi-pass};
+  \node[tag, fill=blue!20, above=of forward] (bidir)   {\texttt{bidirectional\_iterator\_tag} --- \texttt{-{-}}};
+  \node[tag, fill=blue!25, above=of bidir]   (random)  {\texttt{random\_access\_iterator\_tag} --- \texttt{it+n}, \texttt{it[n]}, \texttt{<}};
+  \node[tag, fill=blue!30, above=of random]  (contig)  {\texttt{contiguous\_iterator\_tag} (C++20) --- память подряд};
+
+  \draw[arr] (forward.south) -- (input.north);
+  \draw[arr] (bidir.south)   -- (forward.north);
+  \draw[arr] (random.south)  -- (bidir.north);
+  \draw[arr] (contig.south)  -- (random.north);
+
+  \node[tag, fill=orange!20, right=2cm of bidir] (output) {\texttt{output\_iterator\_tag} --- только запись};
+  \node[font=\footnotesize\itshape, below=0.1cm of output, text width=4.5cm, align=center] {вне основной цепочки: ортогональная категория};
+\end{tikzpicture}
+\caption{Иерархия тегов категорий итераторов}
+\end{figure}
+
+Теги категорий --- это \term{пустые структуры}, наследующиеся друг от друга в стандартной библиотеке:
+\begin{lstlisting}[language=C++]
+struct input_iterator_tag {};
+struct output_iterator_tag {};
+struct forward_iterator_tag       : input_iterator_tag {};
+struct bidirectional_iterator_tag : forward_iterator_tag {};
+struct random_access_iterator_tag : bidirectional_iterator_tag {};
+struct contiguous_iterator_tag    : random_access_iterator_tag {}; // C++20
+\end{lstlisting}
+Такое наследование позволяет \term{tag dispatch} через перегрузку: если функция перегружена для \texttt{random\_access\_iterator\_tag} и \texttt{input\_iterator\_tag}, при передаче random-access побеждает более специфичная версия --- ровно как и при обычном выборе перегрузки с наследованием. Именно поэтому пример со \texttt{std::advance} через \texttt{is\_same\_v<..., random\_access\_iterator\_tag>} (см. lec-03) --- слегка хрупкий: это проверка на точное равенство тега, а не на «итератор хотя бы random-access», и для \texttt{contiguous\_iterator\_tag} она уже даст \texttt{false}. Правильнее писать \texttt{if constexpr (std::derived\_from<tag, std::random\_access\_iterator\_tag>)}.
+
 \begin{implementation}{Псевдокод: итератор для своего Vector}{}
 Чтобы свой контейнер поддерживал \texttt{begin()}/\texttt{end()} и range-based for, достаточно написать маленький класс-обёртку над указателем:
 \begin{lstlisting}[language=C++]

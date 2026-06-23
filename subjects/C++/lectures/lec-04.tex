@@ -2,7 +2,8 @@
 
 \section{На отл(8-9)}
 
-\subsection{Шаблоны для компилятора}
+\subsection{Шаблоны для компилятора} \label{templates-compiler}
+Этот билет объясняет, что компилятор реально делает с шаблонами: когда генерируется код, как выводятся типы и как шаблоны можно использовать для вычислений на этапе компиляции. Базовый синтаксис см. в \ref{templates-basic}, перегрузку и специализацию --- в \ref{templates-advanced}.
 \subsubsection{Инстанцирование шаблонов}
 Шаблон сам по себе --- это не код, а "рецепт" для генерации кода. Реальный код для конкретного типа появляется только тогда, когда шаблон где-то реально используется --- этот процесс называется \term{инстанцированием}.
 \begin{definition}{Инстанцирование шаблона}{}
@@ -175,7 +176,8 @@ static_assert(!AllSame<int, double, int>::value);
 \end{implementation}
 Это заметно компактнее рекурсивной реализации \texttt{is\_same\_many} из секции "на хор" --- весь перебор пакета компилятор делает сам через раскрытие свёртки, без явной структуры для базового случая.
 
-\subsection{Виртуальное наследование}
+\subsection{Виртуальное наследование} \label{virtual-inheritance-and-vtable}
+Этот билет связывает продвинутое наследование с устройством объектов в памяти: виртуальная база, vtable, несколько vptr при множественном наследовании и цена runtime dispatch. Базовые виртуальные функции см. в \ref{dynamic-polymorphism-basic}, экзаменационные ловушки --- в \ref{virtual-advanced}.
 \textbf{Напоминание проблемы} (см. секцию "на хор", проблема ромба): при обычном множественном наследовании, если класс наследуется от одного и того же предка дважды (по разным веткам), внутри оказываются \textbf{две независимые} копии этого предка, и обращение к его полям становится неоднозначным.
 \begin{definition}{Виртуальное наследование}{}
 Способ наследования (\texttt{class Mom: public virtual Granny}), при котором, сколько бы раз класс ни наследовался от \texttt{Granny} по разным путям, в итоговом объекте будет храниться только \textbf{одна, общая} её копия.
@@ -199,6 +201,61 @@ int main() {
 Son: [ptr_to_Mom_vtable][m][ptr_to_Dad_vtable][d][s][Granny: g]
 \end{lstlisting}
 То есть реальный \texttt{Granny} лежит в самом конце (после всех "обычных" частей), а \texttt{Mom} и \texttt{Dad} вместо прямого хранения \texttt{Granny} хранят указатель на специальную служебную таблицу, через которую можно вычислить сдвиг до настоящей, единственной \texttt{Granny}.
+\begin{figure}[htp]
+\centering
+\begin{tikzpicture}[
+  font=\small\sffamily,
+  cell/.style={draw, minimum width=1cm, minimum height=0.7cm, outer sep=0pt},
+  seg/.style={font=\footnotesize, anchor=north},
+]
+  % Son без virtual
+  \node[font=\bfseries, anchor=south] at (2.5, 0.85) {Son: без virtual (две копии Granny)};
+  \node[cell, fill=red!25] (a1) at (0,0) {g};
+  \node[cell, fill=red!25, right=0pt of a1] (a2) {m};
+  \node[cell, fill=blue!25, right=0pt of a2] (a3) {g};
+  \node[cell, fill=blue!25, right=0pt of a3] (a4) {d};
+  \node[cell, fill=yellow!40, right=0pt of a4] (a5) {s};
+  \node[seg] at ($(a1)!0.5!(a2) + (0,-0.42)$) {Mom};
+  \node[seg] at ($(a3)!0.5!(a4) + (0,-0.42)$) {Dad};
+  \node[seg] at ($(a5) + (0,-0.42)$) {Son};
+
+  % Son c virtual
+  \node[font=\bfseries, anchor=south] at (3.0, -2.55) {Son: с virtual (одна общая Granny)};
+  \node[cell, fill=red!25] (b1) at (0,-3.4) {vptr};
+  \node[cell, fill=red!25, right=0pt of b1] (b2) {m};
+  \node[cell, fill=blue!25, right=0pt of b2] (b3) {vptr};
+  \node[cell, fill=blue!25, right=0pt of b3] (b4) {d};
+  \node[cell, fill=yellow!40, right=0pt of b4] (b5) {s};
+  \node[cell, fill=green!30, right=0pt of b5] (b6) {g};
+  \node[seg] at ($(b1)!0.5!(b2) + (0,-0.42)$) {Mom};
+  \node[seg] at ($(b3)!0.5!(b4) + (0,-0.42)$) {Dad};
+  \node[seg] at ($(b5) + (0,-0.42)$) {Son};
+  \node[seg] at ($(b6) + (0,-0.42)$) {Granny};
+
+  % Стрелки от vptr-ов к единственной Granny
+  \draw[->, thick] (b1.north) .. controls +(up:0.7) and +(up:0.9) .. (b6.north);
+  \draw[->, thick] (b3.north) .. controls +(up:0.5) and +(up:0.7) .. (b6.north);
+\end{tikzpicture}
+\caption{Без виртуального наследования vs с виртуальным наследованием}
+\end{figure}
+\textbf{Каст \texttt{static\_cast<Mom*>(\&son)}:} при виртуальном наследовании указатель на \texttt{Son} и указатель на его \texttt{Mom}-подобъект могут \textbf{численно различаться} --- \texttt{Mom}-часть лежит в начале объекта, общая \texttt{Granny} --- в самом конце, и компилятор знает оба сдвига. Поэтому при присваивании \texttt{Mom* m = \&son;} (или явном \texttt{static\_cast<Mom*>(\&son)}) сгенерированный код сам подкорректирует значение указателя так, чтобы оно указывало именно на \texttt{Mom}-подобъект внутри \texttt{son}, а не на сам \texttt{Son}.
+\begin{lstlisting}[language=C++]
+Son son;
+Mom*    m = &son; // не просто (Mom*)(void*)&son -- компилятор сдвинет
+Dad*    d = &son; // другой сдвиг -- до Dad-подобъекта
+Granny* g = &son; // ещё один, отдельный сдвиг -- до общей Granny в конце
+\end{lstlisting}
+\textbf{Конструктор виртуальной базы вызывает самый производный класс:} при \texttt{Son son;} конструктор \texttt{Granny} вызывается \textbf{напрямую из конструктора \texttt{Son}}, а не из \texttt{Mom}/\texttt{Dad}. Это нужно, чтобы виртуальная база была сконструирована ровно один раз --- если бы её создавал сначала \texttt{Mom}, а потом ещё раз \texttt{Dad}, общих \texttt{Granny} получилось бы две (то есть та самая проблема ромба, ради решения которой и затевалось виртуальное наследование). Платой становится требование: если у \texttt{Granny} нет default-конструктора, \texttt{Son} обязан \textbf{сам} указать её конструктор в списке инициализации, даже несмотря на то, что формально наследуется от \texttt{Granny} только через \texttt{Mom} и \texttt{Dad}.
+\begin{lstlisting}[language=C++]
+struct Granny { int g; Granny(int g): g(g) {} }; // нет default-конструктора
+struct Mom: virtual Granny { Mom(): Granny(0) {} };
+struct Dad: virtual Granny { Dad(): Granny(0) {} };
+struct Son: Mom, Dad {
+    Son(int g): Granny(g), Mom(), Dad() {} // Son ОБЯЗАН инициализировать Granny сам
+};
+// вызовы Granny(0) внутри Mom() и Dad() для виртуальной базы игнорируются:
+// Granny конструирует самый производный класс (Son) -- он и передаёт туда g
+\end{lstlisting}
 \subsubsection{Устройство виртуального наследования (точка зрения компилятора)}
 \begin{definition}{vtable при виртуальном наследовании}{}
 Заводится специальная таблица в статической памяти, в которой для каждого класса-наследника записан сдвиг (offset) от начала его подобъекта до общего виртуального предка. Указатель в начале подобъекта \texttt{Mom}/\texttt{Dad} указывает именно на эту таблицу.
@@ -230,6 +287,31 @@ struct Derived: Base {
 \end{implementation}
 Объект \texttt{Derived} устроен так: \texttt{[указатель на vtable][x][y]} (тот же единственный указатель на vtable в начале, что унаследован от \texttt{Base}, просто теперь он указывает на \textbf{другую} таблицу). А vtable для \texttt{Derived} содержит: \texttt{[указатель на type\_info][\&Derived::f][\&Derived::g]} --- то есть переопределённую версию \texttt{f} и новую виртуальную функцию \texttt{g}.
 \textbf{Именно поэтому виртуальный вызов работает в рантайме:} вызов \texttt{obj.f()} компилируется не в прямой адрес функции, а в код "сходить по указателю на vtable объекта, взять оттуда нужную ячейку, вызвать функцию по этому адресу". Какая именно vtable окажется под указателем --- зависит от реального (динамического) типа объекта, а не от типа ссылки/указателя, через который мы обращаемся.
+\begin{figure}[htp]
+\centering
+\begin{tikzpicture}[
+  font=\small\sffamily,
+  cell/.style={draw, minimum width=2.2cm, minimum height=0.7cm, outer sep=0pt},
+  vcell/.style={draw, minimum width=3cm, minimum height=0.7cm, outer sep=0pt, fill=blue!10},
+]
+  % Объект Derived в памяти
+  \node[font=\bfseries, anchor=south] at (1.1, 1.55) {Объект Derived};
+  \node[cell, fill=red!25] (vptr) at (0, 0.7) {vptr};
+  \node[cell, fill=yellow!30, below=0pt of vptr] (xc) {x = 0};
+  \node[cell, fill=yellow!30, below=0pt of xc] (yc) {y = 0};
+
+  % vtable
+  \node[font=\bfseries, anchor=south] at (6.0, 1.55) {vtable для Derived};
+  \node[vcell] (ti)  at (6.0, 0.7)  {\&type\_info(Derived)};
+  \node[vcell, below=0pt of ti] (df) {\&Derived::f};
+  \node[vcell, below=0pt of df] (dg) {\&Derived::g};
+
+  % Стрелка от vptr к началу vtable
+  \draw[->, thick] (vptr.east) -- ++(0.5,0) |- (ti.west);
+\end{tikzpicture}
+\caption{Объект Derived и его vtable}
+\end{figure}
+\textbf{Почему vptr идёт первым полем:} это не случайность, а инвариант, который позволяет компилятору сгенерировать одинаковый код доступа к vtable для всей иерархии. При касте \texttt{Derived* \(\to\) Base*} численное значение указателя не должно мешать найти vtable --- если vptr лежит по нулевому сдвигу, он остаётся по нулевому сдвигу и для \texttt{Base}-подобъекта (ведь \texttt{Base}-часть начинается с того же байта, что и весь \texttt{Derived}). Именно поэтому виртуальный вызов компилируется в одну и ту же последовательность инструкций "разыменуй \texttt{this+0}, возьми ячейку, прыгни" --- независимо от того, через какой статический тип указателя реально пришёл вызов.
 \textbf{Пример с тремя уровнями наследования:}
 \begin{lstlisting}[language=C++]
 struct Granny { int g; }; // не полиморфный! нет виртуальных функций

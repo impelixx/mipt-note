@@ -84,7 +84,8 @@ Matrix operator*(const Matrix& a, const Matrix& b) {
 \end{itemize}
 \textbf{Когда применять:} как правило --- для перегрузки бинарных операторов, которым нужен доступ к приватным полям обоих операндов (хотя чаще для этого достаточно геттеров, см. секцию "на уд"), либо для тесно связанных вспомогательных классов (builder, тестовая обвязка). \texttt{friend} стоит использовать по минимуму --- он ломает инкапсуляцию.
 
-\subsection{Продвинутые шаблоны}
+\subsection{Продвинутые шаблоны} \label{templates-advanced}
+Здесь продолжается базовый билет про шаблоны из \ref{templates-basic}: перегрузка, специализация, параметры по умолчанию и зависимые имена. Низкоуровневое поведение компилятора при инстанцировании и выводе типов см. в \ref{templates-compiler}.
 \subsubsection{Три вида шаблонных параметров}
 \begin{enumerate}
   \item \textbf{Типовой параметр} (\texttt{typename}/\texttt{class}) --- обычный шаблонный параметр-тип: \texttt{template <typename T>}.
@@ -486,7 +487,8 @@ struct Son: Mom, Granny {}; // CE/warning: 'Granny' is an inaccessible (ambiguou
 \end{lstlisting}
 Добраться до "второй" (прямой) \texttt{Granny} в таком случае штатными средствами уже нельзя --- только через грязные трюки со сдвигами указателей и \texttt{reinterpret\_cast}, что на практике означает: так писать не нужно, такую иерархию следует перепроектировать.
 
-\subsection{Виртуальные приколы}
+\subsection{Виртуальные приколы} \label{virtual-advanced}
+Это продолжение базового билета про динамический полиморфизм из \ref{dynamic-polymorphism-basic}: здесь собраны типичные экзаменационные ловушки с виртуальными функциями, \texttt{dynamic\_cast}, \texttt{override} и \texttt{final}. Устройство vtable и множественного/виртуального наследования см. в \ref{virtual-inheritance-and-vtable}.
 \subsubsection{Аргументы по умолчанию в виртуальных функциях}
 \textbf{Важная ловушка:} значение аргумента по умолчанию выбирается по \textbf{статическому} типу, через который вызывается метод, а не по динамическому (реальному) типу объекта --- ведь сами значения по умолчанию не являются виртуальными, они "вшиваются" на этапе компиляции в место вызова:
 \begin{implementation}{Пример}{}
@@ -612,6 +614,104 @@ int main() {
     b.f(); // OK, выведет 2! f -- public у Base (статический тип b), приватность Derived::f не мешает
 }
 \end{lstlisting}
+\subsubsection{Виртуальные функции в конструкторах и деструкторах}
+\textbf{Главное правило:} внутри конструктора и деструктора виртуальный вызов \textbf{не работает} как ожидается --- вызывается версия \textit{текущего} класса, а не самого производного. Причина проста: на момент работы конструктора \texttt{Base} объект \texttt{Derived} ещё не построен (его поля не проинициализированы, его vtable ещё не подменилась на vtable наследника); зеркально для деструктора --- к моменту работы \texttt{\textasciitilde Base} часть \texttt{Derived} уже разрушена.
+\begin{implementation}{Пример}{}
+\begin{lstlisting}[language=C++]
+struct Base {
+    Base()  { f(); } // вызовет Base::f, не Derived::f
+    ~Base() { f(); } // тоже вызовет Base::f
+    virtual void f() { std::cout << "Base\n"; }
+};
+struct Derived: Base {
+    void f() override { std::cout << "Derived\n"; }
+};
+
+int main() {
+    Derived d; // выведет: "Base" (из конструктора Base), "Base" (из деструктора Base)
+}
+\end{lstlisting}
+\end{implementation}
+\textbf{Что происходит "под капотом":} vptr объекта в конструкторе \texttt{Base} указывает на vtable именно \texttt{Base} (а не \texttt{Derived}), потому что компилятор сам подменяет vptr по мере прохождения цепочки конструкторов снизу вверх. Только после полного завершения конструктора \texttt{Derived} vptr указывает на vtable \texttt{Derived} --- и виртуальные вызовы начинают работать "честно". В деструкторе всё происходит в обратном порядке.
+\textbf{Особенно опасно} вызывать чисто виртуальную функцию из конструктора/деструктора --- если в этом классе нет реализации, получим runtime-ошибку \texttt{pure virtual function called} (программа упадёт через \texttt{std::terminate}):
+\begin{lstlisting}[language=C++]
+struct Base {
+    Base() { f(); } // RE: pure virtual function called
+    virtual void f() = 0;
+};
+struct Derived: Base {
+    void f() override { std::cout << "Derived\n"; }
+};
+
+int main() { Derived d; }
+\end{lstlisting}
+\subsubsection{Ковариантный возвращаемый тип}
+Обычно сигнатура переопределённой виртуальной функции в наследнике должна \textbf{полностью} совпадать с сигнатурой родительской (см. секцию про \texttt{override}). Есть ровно одно исключение --- \term{ковариантный возвращаемый тип}: если родитель возвращает указатель/ссылку на \texttt{Base}, наследник может вернуть указатель/ссылку на \texttt{Derived} (свой класс или его наследник).
+\begin{implementation}{Пример: классический clone}{}
+\begin{lstlisting}[language=C++]
+struct Animal {
+    virtual Animal* clone() const { return new Animal(*this); }
+    virtual ~Animal() = default;
+};
+struct Dog: Animal {
+    Dog* clone() const override { return new Dog(*this); } // OK: Dog* "уже" Animal*
+};
+
+int main() {
+    Dog d;
+    Dog* d2 = d.clone(); // не нужно кастовать: возвращаемый тип уже Dog*
+    Animal* a = &d;
+    Animal* a2 = a->clone(); // через Animal* всё равно работает -- виртуальный вызов
+}
+\end{lstlisting}
+\end{implementation}
+\textbf{Правила ковариации (что разрешено):}
+\begin{itemize}
+  \item Только для возвращаемого типа, и только если он --- указатель или ссылка (не значение).
+  \item Тип-наследника в возвращаемом типе должен быть \textit{доступным} (не \texttt{private}/\texttt{protected}) предком --- иначе CE.
+  \item Уровень \texttt{const} тоже должен совпадать или становиться слабее.
+\end{itemize}
+\begin{lstlisting}[language=C++]
+struct Animal { virtual Animal clone(); };
+struct Dog: Animal { Dog clone() override; }; // CE: возврат не по указателю/ссылке
+
+struct Base { virtual Base* f(); };
+struct Der: Base { int* f() override; }; // CE: int* -- не наследник Base*
+\end{lstlisting}
+\textbf{Зачем это нужно:} классический паттерн \term{virtual constructor} (он же \texttt{clone}) --- скопировать объект, не зная его реальный тип, через интерфейс \texttt{Base}. Без ковариации пришлось бы либо везде возвращать \texttt{Base*} (и кастовать снаружи), либо переопределять \texttt{clone} с другой сигнатурой (что разрушит виртуальность).
+\subsubsection{\texttt{typeid} и RTTI}
+\begin{definition}{typeid}{}
+Оператор \texttt{typeid(expr)} возвращает ссылку на \texttt{std::type\_info} --- объект, описывающий тип выражения. У \texttt{type\_info} есть методы \texttt{name()} (имя типа, обычно мангленное) и \texttt{operator==} (сравнение типов).
+\end{definition}
+\textbf{Главная тонкость:} что именно вернёт \texttt{typeid}, зависит от того, полиморфный ли тип выражения:
+\begin{itemize}
+  \item \textbf{Не полиморфный тип} (нет виртуальных функций) --- \texttt{typeid} даёт \textbf{статический} тип (известный на этапе компиляции). Решение принимается компайл-таймом, никаких рантайм-проверок нет.
+  \item \textbf{Полиморфный тип} --- \texttt{typeid} даёт \textbf{реальный (динамический)} тип объекта. Под капотом компилятор лезет через vptr в vtable и берёт оттуда указатель на \texttt{type\_info} --- то самое поле, что упоминалось в "Устройстве виртуальных функций" (см. \ref{virtual-inheritance-and-vtable}).
+\end{itemize}
+\begin{implementation}{Сравнение поведения}{}
+\begin{lstlisting}[language=C++]
+struct NotPoly {};                                    // нет виртуальных
+struct NotPolyDer: NotPoly {};
+
+struct Poly { virtual ~Poly() = default; };           // полиморфный
+struct PolyDer: Poly {};
+
+int main() {
+    NotPolyDer npd;
+    NotPoly& np_ref = npd;
+    std::cout << typeid(np_ref).name(); // NotPoly -- статический тип ссылки
+
+    PolyDer pd;
+    Poly& p_ref = pd;
+    std::cout << typeid(p_ref).name();  // PolyDer -- реальный тип объекта
+}
+\end{lstlisting}
+\end{implementation}
+\textbf{Применение:}
+\begin{lstlisting}[language=C++]
+if (typeid(*ptr) == typeid(Dog)) { /* объект -- РОВНО Dog (не наследник!) */ }
+\end{lstlisting}
+\textbf{Важно} (отличие от \texttt{dynamic\_cast}): \texttt{typeid} проверяет точное совпадение типа, тогда как \texttt{dynamic\_cast<Dog*>} вернёт валидный указатель и для любого наследника \texttt{Dog}. Поэтому \texttt{dynamic\_cast} обычно практичнее --- если вы хотите понять "может ли этот объект использоваться как \texttt{Dog}", нужен именно \texttt{dynamic\_cast}; \texttt{typeid} нужен реже, в основном для логирования и для проверок "ровно этот тип, без наследников".
 
 \subsection{Продвинутые лямбды}
 \subsubsection{Список захвата}
@@ -1332,10 +1432,40 @@ void Vector<T, Alloc>::resize(size_t n, const T& value = T()) {
 Так что "стоит слева от \texttt{=} или нет" --- это просто бытовая эвристика, а не настоящее определение. Нужно настоящее.
 \subsubsection{Правильное определение lvalue/rvalue}
 Первое, что важно понять: \textbf{lvalue и rvalue --- это не свойство переменной или объекта, а свойство выражения}. Один и тот же объект в разных местах кода может участвовать то как lvalue, то как rvalue (как раз это и используется в move-семантике).
-Категорий на самом деле пять: \texttt{glvalue}, \texttt{rvalue}, \texttt{lvalue}, \texttt{xvalue}, \texttt{prvalue}. Для экзамена достаточно понимать три практически важных:
+Категорий на самом деле пять: \texttt{glvalue}, \texttt{rvalue}, \texttt{lvalue}, \texttt{xvalue}, \texttt{prvalue}. Они образуют простое дерево --- "верхние" категории (\texttt{glvalue}, \texttt{rvalue}) объединяют по два конкретных вида значений:
+
+\begin{figure}[htp]
+\centering
+\begin{tikzpicture}[
+  font=\sffamily\small,
+  node distance=0.6cm and 1.2cm,
+  every node/.style={draw, rounded corners=2pt, minimum width=2cm, minimum height=0.6cm, align=center},
+  abstract/.style={fill=blue!10},
+  concrete/.style={fill=green!10},
+  every edge/.style={draw, thick}
+]
+  \node[abstract] (expr) {выражение};
+  \node[abstract, below left=of expr] (gl) {glvalue};
+  \node[abstract, below right=of expr] (rv) {rvalue};
+  \node[concrete, below left=of gl] (lv) {lvalue};
+  \node[concrete, below right=of gl] (xv1) {xvalue};
+  \node[concrete, below=of rv] (pr) {prvalue};
+
+  \draw (expr) -- (gl);
+  \draw (expr) -- (rv);
+  \draw (gl) -- (lv);
+  \draw (gl) -- (xv1);
+  \draw (rv) -- (xv1);
+  \draw (rv) -- (pr);
+\end{tikzpicture}
+\caption{Дерево категорий значений. \texttt{xvalue} принадлежит сразу и \texttt{glvalue}, и \texttt{rvalue}.}
+\end{figure}
+
+\textbf{Идея:} \texttt{glvalue} (generalized lvalue) --- "у объекта есть идентичность" (можно взять его адрес, обращаться повторно); \texttt{rvalue} --- "из объекта можно забрать ресурсы" (move-семантика). \texttt{xvalue} попадает в обе ветки сразу --- именно потому, что у объекта есть идентичность (имя, адрес), но при этом из него уже разрешено выкачивать ресурсы.
+Для экзамена достаточно понимать три практически важных:
 \begin{itemize}
-  \item \textbf{lvalue} --- грубо говоря, что-то "постоянное", у чего есть имя и к чему можно вернуться ещё раз. Например: имя переменной, вызов функции, возвращающей lvalue-ссылку.
-  \item \textbf{prvalue} (pure rvalue) --- что-то "одноразовое", временное, без имени. Например: литералы (\texttt{5}, \texttt{3.14}, кроме строковых литералов), вызов функции, которая возвращает объект по значению (не по ссылке).
+  \item \textbf{lvalue} --- грубо говоря, что-то "постоянное", у чего есть имя и к чему можно вернуться ещё раз. Например: имя переменной, вызов функции, возвращающей lvalue-ссылку, \textbf{строковые литералы} (см. ниже).
+  \item \textbf{prvalue} (pure rvalue) --- что-то "одноразовое", временное, без имени. Например: числовые литералы (\texttt{5}, \texttt{3.14}), вызов функции, которая возвращает объект по значению (не по ссылке).
   \item \textbf{xvalue} (expiring value, "истекающее" значение) --- тоже временное, но это конкретно те объекты, у которых "забирают" ресурсы через move-семантику. Например: вызов функции, возвращающей rvalue-ссылку (то есть результат \texttt{std::move(x)}).
 \end{itemize}
 \begin{lstlisting}[language=C++]
@@ -1344,6 +1474,14 @@ x;                 // lvalue: у переменной x есть имя
 5;                 // prvalue: голый литерал, временный, имени нет
 std::move(x);      // xvalue: x "отдаёт" свои ресурсы дальше
 \end{lstlisting}
+\textbf{Почему строковые литералы --- lvalue, а числовые --- prvalue:} строковый литерал \texttt{"hello"} имеет тип \texttt{const char[6]} и реально лежит в статической памяти программы (в секции \texttt{.rodata}) --- у него есть постоянный адрес, к нему можно возвращаться сколько угодно раз. А числовой литерал \texttt{5} в памяти как объект не существует --- это просто значение, которое компилятор кладёт прямо в инструкцию (immediate operand). Отсюда и разница в категориях:
+\begin{lstlisting}[language=C++]
+const char* p = "hello";   // OK, у строкового литерала есть адрес
+const char(&r)[6] = "hello"; // OK, lvalue-ссылка на массив
+// const int& q = 5;       // продление жизни через const& -- да, но здесь происходит
+                            // создание ВРЕМЕННОГО int со значением 5, а не привязка к самому литералу
+\end{lstlisting}
+\textbf{Замечание о \texttt{decltype}:} категория значения напрямую влияет на то, какой тип возвращает \texttt{decltype(expr)}: \texttt{prvalue} даёт \texttt{T}, \texttt{lvalue} --- \texttt{T\&}, \texttt{xvalue} --- \texttt{T\&\&}. Подробнее --- в секции "Вывод типов" ("на отл").
 \subsubsection{rvalue-ссылки и правила их инициализации}
 Сначала вспомним обычные (lvalue) ссылки: их можно проинициализировать только lvalue-выражением.
 \begin{lstlisting}[language=C++]
@@ -1505,6 +1643,44 @@ int main() {
 }
 \end{lstlisting}
 То есть: если передали lvalue, \texttt{T} выводится как \texttt{T\&}, и тогда \texttt{T\&\&} схлопывается в \texttt{T\&} (lvalue-ссылка). Если передали rvalue, \texttt{T} выводится просто как \texttt{T}, и \texttt{T\&\&} остаётся \texttt{T\&\&} (rvalue-ссылка). Удобно запомнить так: \textbf{универсальная ссылка "подстраивается" под то, что ей дали}.
+
+Сводная таблица (для шаблона \texttt{template <typename T> void f(T\&\& x)}):
+\begin{center}
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Что передали в \texttt{f(...)}} & \textbf{Выведенный \texttt{T}} & \textbf{Фактический тип \texttt{x}} \\
+\hline
+lvalue (\texttt{int y; f(y);}) & \texttt{int\&} & \texttt{int\&} \\
+const lvalue (\texttt{const int c; f(c);}) & \texttt{const int\&} & \texttt{const int\&} \\
+rvalue (\texttt{f(5);}) & \texttt{int} & \texttt{int\&\&} \\
+xvalue (\texttt{f(std::move(y));}) & \texttt{int} & \texttt{int\&\&} \\
+\hline
+\end{tabular}
+\end{center}
+\textbf{Ловушка с \texttt{push\_back}} (на ней регулярно ошибаются, в том числе на экзамене). Внутри шаблонного класса \texttt{Vector<T>}:
+\begin{lstlisting}[language=C++]
+template <typename T>
+class Vector {
+ public:
+    void push_back(T&& value);  // НЕ универсальная ссылка! T -- параметр КЛАССА
+
+    template <typename U>
+    void emplace_one(U&& value); // А вот это уже универсальная ссылка -- U параметр МЕТОДА
+};
+
+int main() {
+    Vector<int> v;
+    int x = 5;
+    v.push_back(x);        // CE: T&& == int&&, а x -- lvalue
+    v.push_back(std::move(x)); // OK
+    v.push_back(5);        // OK
+
+    v.emplace_one(x);      // OK, U выведется как int&
+    v.emplace_one(5);      // OK, U выведется как int
+}
+\end{lstlisting}
+\textbf{Почему так:} \texttt{T} в \texttt{Vector<int>::push\_back} уже \textbf{зафиксирован} на этапе инстанцирования класса (\texttt{T = int}) --- это не выводимый параметр функции, а готовое значение. Поэтому \texttt{T\&\&} здесь --- просто rvalue-ссылка на \texttt{int}, без всякой "магии" универсальности. Универсальная ссылка работает только тогда, когда сама функция шаблонна по тому же параметру, который стоит при \texttt{\&\&}.
+\textbf{Поэтому} стандартный \texttt{std::vector} даёт \textbf{две перегрузки}: \texttt{push\_back(const T\&)} (для lvalue, с копированием) и \texttt{push\_back(T\&\&)} (для rvalue, с перемещением) --- именно потому, что одной "универсальной" версии тут получить нельзя.
 \textbf{Замечание:} при выборе перегрузки универсальные ссылки имеют приоритет перед остальными вариантами (например, перед \texttt{const T\&}).
 \subsubsection{Реализация \texttt{std::move}}
 Хотим написать свою версию \texttt{std::move}. Сразу понятно, что она должна принимать и lvalue, и rvalue (значит, нужна универсальная ссылка), а возвращать --- всегда rvalue-ссылку (это же весь смысл \texttt{move} --- сказать "это можно забрать").
@@ -1616,6 +1792,32 @@ void Vector<T, Alloc>::emplace_back(Args&&... args) {
 \end{lstlisting}
 \end{implementation}
 Реализация \texttt{resize} уже была разобрана в секции "Продвинутая память" (она строится поверх \texttt{reserve}, который использует \texttt{std::move} для уже существующих элементов вектора при переезде в новый буфер): см. подробный разбор там же. Главная идея, которую стоит унести из обеих реализаций: \texttt{std::move} используется, когда мы сами внутри функции точно знаем, что объект больше не нужен в старом виде (как элементы вектора при \texttt{reserve}), а \texttt{std::forward} --- когда нужно сохранить "категорию" (lvalue/rvalue) аргумента, который пришёл к нам неизвестно откуда (как в \texttt{emplace\_back}).
+\subsubsection{Паттерн "обёртки" через perfect forwarding}
+Тот же приём, что и в \texttt{emplace\_back}, регулярно встречается в общих "обёрточных" функциях --- когда нужно вызвать произвольную функцию с произвольным набором аргументов, не теряя ни copy/move-семантику аргументов, ни категорию возвращаемого значения:
+\begin{implementation}{Универсальная обёртка}{}
+\begin{lstlisting}[language=C++]
+template <typename F, typename... Args>
+decltype(auto) wrap(F&& f, Args&&... args) {
+    // например, можно перед вызовом залогировать или замерить время
+    std::cout << "calling f with " << sizeof...(args) << " args\n";
+    return std::forward<F>(f)(std::forward<Args>(args)...);
+}
+
+int main() {
+    auto add = [](int a, int b) { return a + b; };
+    int result = wrap(add, 1, 2);
+    std::string s = "hello";
+    wrap([](std::string x) { std::cout << x; }, std::move(s)); // s корректно муванётся внутрь
+}
+\end{lstlisting}
+\end{implementation}
+\textbf{Что важного в этом коде:}
+\begin{itemize}
+  \item \texttt{F\&\&} --- универсальная ссылка на функцию/функтор/лямбду. \texttt{std::forward<F>(f)} сохраняет её категорию --- если передали rvalue (например, лямбду прямо на месте), её можно муваться.
+  \item Каждый \texttt{args} проходит через \texttt{std::forward<Args>(args)} --- то есть передаётся в \texttt{f} \textbf{с той же категорией}, с которой пришёл в \texttt{wrap}.
+  \item \texttt{decltype(auto)} в возвращаемом типе --- сохраняет в том числе ссылочную категорию того, что вернула \texttt{f} (см. секцию "Вывод типов" в "на отл"). Если бы там стояло просто \texttt{auto}, ссылка отбрасывалась бы (см. секцию "на уд").
+\end{itemize}
+\textbf{Сводная таблица всех случаев \texttt{std::forward}} (для \texttt{template <typename T> void g(T\&\& x) \{ ...std::forward<T>(x)... \}}) разбирается в секции "на отл" --- см. \ref{templates-compiler} и подраздел "\texttt{std::forward}: реализация и детальный разбор всех случаев".
 
 \subsection{\texttt{shared\_ptr} и сопутствующее}
 \subsubsection{Идея реализации \texttt{shared\_ptr} (с \texttt{weak\_ptr})}
