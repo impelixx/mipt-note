@@ -127,8 +127,8 @@ jobs:
 
       - name: Build PDF
         run: |
-          cd "subjects/${{ matrix.subject }}"
-          latexmk -xelatex -interaction=nonstopmode -halt-on-error main.tex
+          chmod +x scripts/build-all.sh
+          ./scripts/build-all.sh "${{matrix.subject}}"
 
       - name: Prepare release files
         run: |
@@ -136,8 +136,8 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
 
           mkdir -p release
-          cp "subjects/$SUBJECT/main.pdf" "release/${SUBJECT}.pdf"
-          cp "subjects/$SUBJECT/main.pdf" "release/${SUBJECT}-${VERSION}.pdf"
+          cp "output/$SUBJECT.pdf" "release/${SUBJECT}.pdf"
+          cp "output/$SUBJECT-${VERSION}.pdf" "release/${SUBJECT}-${VERSION}.pdf"
 
       - name: Delete old release for this subject
         run: |
@@ -155,7 +155,7 @@ jobs:
             # ${{ steps.version.outputs.course_name }}
 
             **Версия:** `${{ steps.version.outputs.version }}`
-            **Обновлено:** ${{ steps.version.outputs.date }}
+            **Дата:** ${{ steps.version.outputs.date }}
 
             ## Скачать
 
