@@ -4,81 +4,1532 @@
 
 \subsection{Классы и базовая ООП механика}
 \subsubsection{Модификаторы доступа (public/private)}
+\begin{implementation}{Public/private/protected}{}
+\begin{lstlisting}[language=C++]
+class C {
+ public: // все, что ниже -- публично, до следующей секции
+  int a;
+ private:
+  int b;
+ protected: // понадобится при наследовании
+  int c;
+ public: // секции можно переоткрывать сколько угодно раз
+  void Foo();
+};
+
+int main() {
+    C c;
+    c.a;    // OK
+    c.b;    // CE: приватный член
+    c.c;    // CE: protected член
+    c.Foo(); // OK
+}
+\end{lstlisting}
+\end{implementation}
+\textbf{Важно:}
+\begin{itemize}
+  \item Разница между \texttt{private} и \texttt{protected} видна только при наследовании (Вопрос 4 этой секции).
+  \item Главное отличие \texttt{class} от \texttt{struct}: у \texttt{struct} модификатор доступа по умолчанию --- \texttt{public}, у \texttt{class} --- \texttt{private}.
+  \item Проверка доступа происходит \textbf{после} выбора перегрузки (то есть сначала компилятор решает, какую функцию вызвать, и только потом проверяет, можно ли это делать).
+\end{itemize}
+\begin{definition}{Class scope}{}
+\textbf{Class scope} --- область кода от открывающей фигурной скобки класса до точки с запятой после закрывающей. Внутри него можно только объявлять/определять сущности (поля, методы, вложенные типы), но нельзя писать произвольные выражения и управляющие конструкции.
+\end{definition}
+В class scope можно объявлять вложенные классы/структуры и \texttt{using}-алиасы:
+\begin{lstlisting}[language=C++]
+struct Student {
+    struct Test {
+        int a;
+        int b;
+    };
+    using Time = size_t;
+};
+\end{lstlisting}
 \subsubsection{Инициализация по умолчанию}
+Если у полей класса не заданы значения по умолчанию и конструктор их не инициализирует, поля встроенных типов будут содержать мусор:
+\begin{lstlisting}[language=C++]
+struct Student {
+    std::string name; // OK, пустая строка (у std::string есть конструктор по умолчанию)
+    size_t grade;      // мусор!
+};
+\end{lstlisting}
+Чтобы избежать мусора, можно задать значения по умолчанию прямо при объявлении полей:
+\begin{lstlisting}[language=C++]
+struct Student {
+    std::string name = "Test";
+    size_t grade = 10;
+};
+\end{lstlisting}
 \subsubsection{Конструкторы и деструкторы}
-\subsubsection{Делигирующие конструкторы}
+\begin{definition}{Конструктор}{}
+\textbf{Конструктор} --- специальный метод класса, описывающий, как создать объект из каких-то параметров. Имя совпадает с именем класса, возвращаемого типа нет.
+\end{definition}
+\begin{implementation}{Пример конструктора}{}
+\begin{lstlisting}[language=C++]
+class Student {
+ public:
+    Student(const std::string& name, size_t grade) {
+        name_ = name;   // поля уже проинициализированы значениями по умолчанию
+        grade_ = grade;
+    }
+ private:
+    std::string name_;
+    size_t grade_;
+};
+\end{lstlisting}
+\end{implementation}
+\begin{definition}{Деструктор}{}
+\textbf{Деструктор} --- специальный метод, который вызывается при уничтожении объекта (выход из области видимости, \texttt{delete} и т.п.). Не принимает аргументов, не перегружается, у класса может быть только один деструктор.
+\end{definition}
+\begin{implementation}{Деструктор для класса с динамической памятью}{}
+\begin{lstlisting}[language=C++]
+class Vector {
+ public:
+    Vector(size_t size, int value = 0): size_(size) {
+        arr_ = new int[size_];
+        for (size_t i = 0; i < size; ++i) {
+            arr_[i] = value;
+        }
+    }
+
+    ~Vector() { // деструктор
+        delete[] arr_;
+    }
+ private:
+    int* arr_ = nullptr;
+    size_t size_ = 0;
+};
+\end{lstlisting}
+\end{implementation}
+\textbf{Замечания:}
+\begin{itemize}
+  \item Деструктор генерируется компилятором всегда (пустой), даже если вы не написали ни одного конструктора.
+  \item Деструктор можно вызвать руками, но делать этого не стоит: повторный вызов деструктора у одного объекта --- UB (double destruction).
+\end{itemize}
+\subsubsection{Делегирующие конструкторы}
+\begin{definition}{Делегирующий конструктор}{}
+Конструктор, который вызывает в списке инициализации \textbf{другой конструктор того же класса}, чтобы переиспользовать его логику.
+\end{definition}
+\textbf{Важно:} нельзя просто вызвать конструктор из тела другого конструктора --- это создаст временный объект, а не доинициализирует текущий:
+\begin{lstlisting}[language=C++]
+struct S {
+    S(int a) { /* ... */ }
+    S(int a, size_t c) {
+        S(a); // НЕВЕРНО: создаёт новый временный объект, а не делегирует
+    }
+};
+\end{lstlisting}
+Правильно --- делегировать через список инициализации:
+\begin{lstlisting}[language=C++]
+struct S {
+    S(int a) { /* ... */ }
+    S(int a, size_t c): S(a) { } // делегирующий конструктор
+};
+\end{lstlisting}
+\textbf{Замечание:} если конструктор делегирующий, никакими другими членами списка инициализации пользоваться уже нельзя.
 \subsubsection{Списки инициализации}
+\begin{implementation}{Список инициализации}{}
+\begin{lstlisting}[language=C++]
+class Student {
+ public:
+    Student(const std::string& name, size_t grade): name_(name), grade_(grade) {}
+ private:
+    std::string name_;
+    size_t grade_;
+};
+\end{lstlisting}
+\end{implementation}
+\textbf{Важно:} конструкторы полей вызываются в том порядке, в котором поля \textbf{перечислены в теле класса}, а не в том, в каком они стоят в списке инициализации.
+Иногда без списка инициализации не обойтись --- например, для ссылочных полей и \texttt{const}-полей, которые нельзя присвоить в теле конструктора:
+\begin{lstlisting}[language=C++]
+int x = 0;
+struct S {
+    S() {
+        ref = x; // CE: ссылку нельзя инициализировать присваиванием
+    }
+    int& ref;
+};
+
+// правильно:
+struct S2 {
+    S2(): ref(x) {} // OK, инициализация в списке
+    int& ref;
+};
+\end{lstlisting}
 \subsubsection{Порядок вызова конструкторов и деструкторов}
+\textbf{При создании объекта:}
+\begin{enumerate}
+  \item Сначала вызываются конструкторы для каждого поля (в порядке объявления полей в классе).
+  \item Затем вызывается конструктор самого класса.
+\end{enumerate}
+\textbf{При уничтожении объекта} --- в обратном порядке:
+\begin{enumerate}
+  \item Сначала вызывается деструктор класса.
+  \item Затем деструкторы полей (в порядке, обратном объявлению).
+\end{enumerate}
+\begin{implementation}{Иллюстрация порядка}{}
+\begin{lstlisting}[language=C++]
+struct S  { S()  { std::cout << "S\n"; }  ~S()  { std::cout << "~S\n"; } };
+struct SS { SS() { std::cout << "SS\n"; } ~SS() { std::cout << "~SS\n"; } };
+
+struct Test {
+    Test(int a): a_(a) { std::cout << "Test " << a_ << "\n"; }
+    ~Test() { std::cout << "~Test " << a_ << "\n"; }
+
+    S s;
+    SS ss;
+    int a_;
+};
+
+int main() {
+    Test t1(1);
+    Test t2(2);
+}
+// Вывод: S SS Test 1 / S SS Test 2 / ~Test 2 ~SS ~S / ~Test 1 ~SS ~S
+\end{lstlisting}
+\end{implementation}
 \subsubsection{Конструктор по умолчанию}
+\begin{definition}{Конструктор по умолчанию}{}
+\textbf{Конструктор по умолчанию} --- конструктор без аргументов (или такой, у которого все аргументы имеют значения по умолчанию).
+\end{definition}
+\begin{lstlisting}[language=C++]
+class Student {
+ public:
+    Student() { std::cout << "default construct"; }
+    Student(const std::string& name, size_t grade): name_(name), grade_(grade) {}
+ private:
+    std::string name_;
+    size_t grade_;
+};
+
+int main() {
+    Student s; // вызовется Student()
+}
+\end{lstlisting}
+\textbf{Важно:} компилятор сам генерирует конструктор по умолчанию (с пустым телом), но \textbf{только если вы не написали ни одного своего конструктора}. Как только появляется хотя бы один пользовательский конструктор, автогенерация конструктора по умолчанию пропадает.
 \subsubsection{Конструктор копирования}
+\begin{definition}{Конструктор копирования}{}
+\textbf{Конструктор копирования} позволяет создать новый объект как копию уже существующего: \texttt{T second = first;} или \texttt{T second(first);}. Это вызов именно конструктора копирования, а не оператора присваивания (объект \texttt{second} ещё не существовал).
+\end{definition}
+Конструктор копирования генерируется по умолчанию и просто копирует каждое поле. Это устраивает не всегда --- например, для класса с динамической памятью дефолтная копия приведёт к тому, что два объекта будут указывать на одну и ту же память, и при разрушении обоих случится double free:
+\begin{lstlisting}[language=C++]
+class Vector {
+ public:
+    Vector(size_t size, int value = 0): size_(size), arr_(new int[size_]) {
+        for (size_t i = 0; i < size; ++i) arr_[i] = value;
+    }
+    ~Vector() { delete[] arr_; }
+ private:
+    int* arr_ = nullptr;
+    size_t size_ = 0;
+};
+// С дефолтным конструктором копирования -- double free!
+\end{lstlisting}
+Пишем свой, делающий глубокую копию (deep copy):
+\begin{lstlisting}[language=C++]
+Vector(const Vector& other): arr_(new int[other.size_]), size_(other.size_) {
+    memcpy(arr_, other.arr_, size_ * sizeof(int));
+}
+\end{lstlisting}
 \subsubsection{Константные методы}
+\begin{definition}{Константный метод}{}
+\textbf{Константный метод} --- метод, который можно вызвать как у обычного, так и у константного объекта. Внутри него нельзя менять поля объекта и нельзя вызывать неконстантные методы.
+\end{definition}
+\begin{implementation}{Перегрузка по константности}{}
+\begin{lstlisting}[language=C++]
+struct S {
+    void Test() { std::cout << 0; }
+    void Bar() const { std::cout << 3; }
+    void Foo() { std::cout << 1; }
+    void Foo() const { std::cout << 2; }
+};
+
+int main() {
+    S s;
+    const S const_s;
+
+    s.Bar(); s.Foo();             // 3 1
+    const_s.Bar(); const_s.Foo(); // 3 2
+
+    const_s.Test(); // CE: Test не const
+}
+\end{lstlisting}
+\end{implementation}
+Если хочется менять конкретное поле даже в константном методе --- его нужно пометить \texttt{mutable}:
+\begin{lstlisting}[language=C++]
+struct S {
+    int a = 0;
+    mutable int b = 10;
+    void Foo() const {
+        // a += 1; // CE
+        b += 1;    // OK, b -- mutable
+    }
+};
+\end{lstlisting}
+\textbf{Важно:} константность на поля-указатели и поля-ссылки в константном методе навешивается "справа", то есть указатель в константном методе становится константным, но то, на что он указывает --- нет:
+\begin{lstlisting}[language=C++]
+struct S {
+    char* arr; // внутри const-метода ведёт себя как char* const
+    int& ref;
+
+    void Foo() const {
+        *arr = 20; // OK, можно менять данные под указателем
+        ref += 1;  // OK, ссылка и так не может быть "переприсвоена"
+    }
+};
+\end{lstlisting}
 \subsubsection{Статические поля и методы}
+Иногда нужно поле, единое для всех объектов класса (что-то вроде глобальной переменной с ограниченной областью видимости):
+\begin{lstlisting}[language=C++]
+struct S {
+    static int x;
+};
+int S::x = 0; // статические поля нужно определить вне класса
+
+int main() {
+    std::cout << S::x;
+}
+\end{lstlisting}
+То же самое работает и с методами:
+\begin{lstlisting}[language=C++]
+struct S {
+    static void Foo() {
+        // ++a; // CE: нет доступа к нестатическим полям, нет this
+        ++x;    // OK
+    }
+    int a;
+    static int x;
+};
+
+int main() {
+    S::Foo(); // вызывается без объекта
+}
+\end{lstlisting}
+\textbf{Замечание:} если статический член приватный, взаимодействовать с ним сможет только сам класс (и его \texttt{friend}-ы).
 \subsubsection{Оператор присваивания}
+\begin{definition}{Оператор присваивания}{}
+Позволяет скопировать значение \textbf{уже существующего} объекта в другой \textbf{уже существующий} объект: \texttt{v1 = v2;}. Генерируется по умолчанию (копирует каждое поле почленно), что для классов с динамической памятью снова приводит к проблемам.
+\end{definition}
+\begin{implementation}{Свой оператор присваивания}{}
+\begin{lstlisting}[language=C++]
+class Vector {
+ public:
+    Vector& operator=(const Vector& other) {
+        delete[] arr_;
+        size_ = other.size_;
+        arr_ = new int[size_];
+        memcpy(arr_, other.arr_, size_ * sizeof(int));
+        return *this;
+    }
+ private:
+    int* arr_ = nullptr;
+    size_t size_ = 0;
+};
+\end{lstlisting}
+\end{implementation}
+\textbf{Проблема:} что если присвоить объект самому себе (\texttt{v = v;})? В наивной версии выше мы сначала удалим \texttt{arr\_}, а потом попытаемся прочитать \texttt{other.arr\_}, которое уже разрушено --- UB.
+\textbf{Решение 1 --- проверка на self-assignment:}
+\begin{lstlisting}[language=C++]
+Vector& operator=(const Vector& other) {
+    if (&other == this) {
+        return *this;
+    }
+    delete[] arr_;
+    size_ = other.size_;
+    arr_ = new int[size_];
+    memcpy(arr_, other.arr_, size_ * sizeof(int));
+    return *this;
+}
+\end{lstlisting}
+\textbf{Решение 2 --- copy-and-swap} (надёжнее, заодно даёт строгую exception-safety):
+\begin{lstlisting}[language=C++]
+Vector& operator=(const Vector& other) {
+    Vector copy = other; // копия через конструктор копирования
+    swap(copy);           // обмен внутренностей с копией (его нужно реализовать)
+    return *this;
+}
+\end{lstlisting}
 \subsubsection{Правило трёх}
+\begin{definition}{Правило трёх}{}
+Если для класса понадобилось написать нетривиальный (отличный от автогенерируемого) деструктор, конструктор копирования или оператор присваивания копированием --- скорее всего, нужны все три. Это \textbf{словесное} правило (best practice), компилятор его не проверяет и не требует.
+\end{definition}
+Интуиция: если деструктору нужно явно освобождать ресурс (например, \texttt{delete[] arr\_}), значит класс владеет ресурсом не тривиально, и дефолтное почленное копирование (через конструктор копирования/оператор присваивания) почти наверняка приведёт к double free или утечке.
 \subsubsection{Перегружаемые операторы}
+Перегружать \textbf{нельзя}: \texttt{*\_cast} (\texttt{static\_cast} и т.п.), \texttt{.}, \texttt{::}, \texttt{?:} (и \texttt{new}/\texttt{delete} --- отдельная тема, см. секцию "на хор"). Всё остальное --- можно.
+\textbf{Правила перегрузки операторов:}
+\begin{itemize}
+  \item Перегрузить поведение оператора можно только если хотя бы один из операндов --- ваш кастомный тип (поведение для пары встроенных типов перегрузить нельзя).
+  \item Нельзя менять арность оператора (бинарный остаётся бинарным).
+  \item Нельзя придумывать новые операторы --- можно только переопределить поведение существующих.
+\end{itemize}
+Операторы перегружают либо \textbf{внутри} класса (тогда у бинарного оператора будет один явный аргумент --- правый операнд, левый это \texttt{*this}), либо \textbf{снаружи} (оба операнда явные аргументы).
+\begin{implementation}{Перегрузка внутри класса}{}
+\begin{lstlisting}[language=C++]
+struct Int {
+    Int(int value): value(value) {}
+    Int operator+(const Int& other) {
+        return Int(value + other.value);
+    }
+    int value = 0;
+};
+
+int main() {
+    Int a(10), b(20);
+    Int c = a + b; // OK
+    // 10 + a;     // CE: левый операнд нельзя неявно привести к Int
+}
+\end{lstlisting}
+\end{implementation}
+\textbf{Операторы ввода/вывода в поток} перегружаются только снаружи (левый операнд --- поток, а не наш класс):
+\begin{lstlisting}[language=C++]
+struct S { int a = 0; };
+
+std::ostream& operator<<(std::ostream& os, const S& s) {
+    os << s.a;
+    return os;
+}
+std::istream& operator>>(std::istream& is, S& s) {
+    is >> s.a;
+    return is;
+}
+\end{lstlisting}
+\textbf{Оператор () (функторы):} объект, перегрузивший \texttt{operator()}, называется \term{функтором} --- ведёт себя как функция. Удобно, например, для передачи кастомного компаратора:
+\begin{lstlisting}[language=C++]
+struct IntCompare {
+    bool operator()(int lhs, int rhs) const {
+        return lhs % 5 < rhs % 5;
+    }
+};
+
+int main() {
+    std::vector<int> v{21, 22, 33, 47};
+    std::sort(v.begin(), v.end(), IntCompare());
+}
+\end{lstlisting}
+\textbf{Оператор []} обычно имеет неконстантную и константную версии, без проверки границ (для проверки есть отдельный метод \texttt{at}, ради скорости в \texttt{[]} проверки не делают):
+\begin{lstlisting}[language=C++]
+class Vector {
+ public:
+    int& operator[](size_t index) { return arr_[index]; }
+    const int& operator[](size_t index) const { return arr_[index]; }
+ private:
+    int* arr_ = nullptr;
+};
+\end{lstlisting}
+\textbf{Операторы * и ->} для классов, имитирующих указатель: \texttt{*} обычно возвращает ссылку на объект под "указателем" (и обычно константный), а \texttt{->} должен возвращать то, к чему снова можно применить \texttt{->}, пока цепочка не дойдёт до встроенного указателя:
+\begin{lstlisting}[language=C++]
+struct T {};
+struct TPointer {
+    T* ptr;
+    T* operator->() const { return ptr; }
+};
+\end{lstlisting}
+\textbf{Замечание:} операторы \texttt{\&\&}, \texttt{||}, \texttt{,} тоже можно перегружать, но при перегрузке \texttt{\&\&}/\texttt{||} теряется свойство ленивых вычислений (оба операнда вычисляются как обычные аргументы функции).
 \subsubsection{Перегрузка арифметических операторов и её нюансы}
+\begin{implementation}{Геттеры вместо friend}{}
+Если поле приватное, не нужно делать \texttt{friend} на каждый внешний оператор --- удобнее завести геттер:
+\begin{lstlisting}[language=C++]
+class Int {
+ public:
+    Int(int value): value_(value) {}
+    int GetValue() const { return value_; }
+ private:
+    int value_;
+};
+
+Int operator+(const Int& lhs, const Int& rhs) {
+    return Int(lhs.GetValue() + rhs.GetValue());
+}
+\end{lstlisting}
+\end{implementation}
+\textbf{Составные операторы присваивания} (\texttt{+=} и подобные) обычно перегружают внутри класса, так как левый операнд всегда наш объект:
+\begin{lstlisting}[language=C++]
+Int& operator+=(const Int& other) {
+    value_ += other.GetValue();
+    return *this;
+}
+\end{lstlisting}
+\textbf{Унарные + и -}:
+\begin{lstlisting}[language=C++]
+Int operator+() const { return *this; }
+Int operator-() const { Int copy = *this; copy.value_ *= -1; return copy; }
+\end{lstlisting}
+\textbf{Инкремент/декремент:} префиксный и постфиксный имеют одинаковую семантику изменения, поэтому постфиксный отличают фиктивным параметром \texttt{int}:
+\begin{lstlisting}[language=C++]
+Int& operator++() {       // префиксный
+    *this += 1;
+    return *this;
+}
+Int operator++(int) {     // постфиксный, int -- фиктивный параметр
+    Int copy = *this;
+    *this += 1;
+    return copy;
+}
+\end{lstlisting}
+\textbf{Операторы сравнения:} разумно начать с \texttt{<}, через него удобно выразить всё остальное:
+\begin{lstlisting}[language=C++]
+bool operator<(const Int& lhs, const Int& rhs) {
+    return lhs.GetValue() < rhs.GetValue();
+}
+bool operator>(const Int& lhs, const Int& rhs) { return rhs < lhs; }
+bool operator==(const Int& lhs, const Int& rhs) {
+    return !(lhs < rhs) && !(rhs < lhs);
+}
+\end{lstlisting}
+\textbf{Замечание:} \texttt{==} лучше реализовывать "честно" (через прямое сравнение полей), а не через два вызова \texttt{<} --- это быстрее.
+\textbf{Главные правила перегрузки арифметических операторов:}
+\begin{itemize}
+  \item Бинарные операторы лучше перегружать \textbf{снаружи} класса --- так работает неявное приведение типов для обоих операндов (\texttt{10 + a} тоже скомпилируется).
+  \item Бинарный оператор стоит выражать через его составную версию с присваиванием (\texttt{+} через \texttt{+=} и т.д.) --- меньше дублирования кода.
+\end{itemize}
 
 \subsection{Приведения типов}
 \subsubsection{c-style cast}
+\begin{implementation}{C-style каст}{}
+\begin{lstlisting}[language=C++]
+int main() {
+    int a = 5;
+    double d = (double)a; // C-style каст
+}
+\end{lstlisting}
+\end{implementation}
+\textbf{Так кастовать не нужно.} C-style каст --- это, по сути, "попробовать по очереди" \texttt{static\_cast}, \texttt{const\_cast} и \texttt{reinterpret\_cast} (и их комбинации), пока что-то не скомпилируется. Из-за этого по одной записи \texttt{(T)x} невозможно понять, что именно произойдёт --- безобидное преобразование типа или опасный reinterpret со снятием константности. Именно поэтому в C++ для явных кастов предпочитают именованные операторы ниже.
 \subsubsection{static\_cast}
+\begin{definition}{static\_cast}{}
+\textbf{static\_cast} использует преобразование, известное компилятору на этапе компиляции (отсюда и название --- static). Таких преобразований много: \texttt{bool} в \texttt{int}, \texttt{const char*} в \texttt{std::string}, числовые преобразования, явный вызов конструктора и т.п.
+\end{definition}
+\begin{lstlisting}[language=C++]
+int main() {
+    int a = 5;
+    double d = static_cast<double>(a); // создалась новая сущность типа double
+}
+\end{lstlisting}
 \subsubsection{const\_cast}
+\begin{definition}{const\_cast}{}
+\textbf{const\_cast} нужен, чтобы навесить или снять константность с указателя/ссылки. Не создаёт новой сущности и не меняет тип "по сути" --- только модификатор \texttt{const}.
+\end{definition}
+\begin{lstlisting}[language=C++]
+void f(int&) {}       // 1
+void f(const int&) {} // 2
+
+int main() {
+    int a = 10;
+    f(a);                          // вызовет 1
+    f(const_cast<const int&>(a)); // вызовет 2
+}
+\end{lstlisting}
+\textbf{Важно (главная ловушка const\_cast):} снятие константности безопасно работать будет, только если исходный объект изначально не был константным:
+\begin{lstlisting}[language=C++]
+int main() {
+    int c = 5;
+    const int& a = c;             // a ссылается на неконстантный c
+    int& x = const_cast<int&>(a);
+    ++x; // OK, c действительно можно менять
+
+    const int d = 10;             // d -- по-настоящему константный объект
+    int& dd = const_cast<int&>(d);
+    ++dd; // UB! пытаемся изменить настоящий const-объект
+}
+\end{lstlisting}
 \subsubsection{reinterpret\_cast}
+\begin{definition}{reinterpret\_cast}{}
+\textbf{reinterpret\_cast} интерпретирует байты памяти одного типа как байты памяти другого типа, не создавая новой сущности и не выполняя никакого преобразования значения. Умеет приводить только указатели и ссылки.
+\end{definition}
+\begin{lstlisting}[language=C++]
+int a = 0;
+double* b = reinterpret_cast<double*>(&a); // те же 4/8 байт, но "читаем" их как double
+\end{lstlisting}
+\textbf{Важно:} результат разыменования такого указателя в общем случае --- UB (нарушение strict aliasing), это низкоуровневый и опасный инструмент.
 \subsubsection{Использование и применимость различных кастов}
+\begin{center}
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Каст} & \textbf{Когда применять} \\
+\hline
+\texttt{static\_cast} & Преобразование, известное компилятору: числа, явные конструкторы, иерархии классов вверх/вниз (безопасно вверх) \\
+\hline
+\texttt{const\_cast} & Только навесить/снять \texttt{const} (и \texttt{volatile}), тип по сути не меняется \\
+\hline
+\texttt{reinterpret\_cast} & Низкоуровневая переинтерпретация байт указателя/ссылки, опасно, использовать редко \\
+\hline
+\texttt{c-style cast} & Не использовать: непрозрачно комбинирует все касты выше \\
+\hline
+\end{tabular}
+\end{center}
+\textbf{Правило:} нужно всегда выбирать самый "слабый" (специфичный) каст, который решает задачу --- это и явно говорит читателю кода о намерении, и не даёт компилятору молча сделать что-то более опасное, чем требовалось.
 
 \subsection{Шаблоны}
 \subsubsection{Основная идея и синтаксис}
+\textbf{Проблема:} нужна одна и та же логика для разных типов:
+\begin{lstlisting}[language=C++]
+int GetMax(const int& a, const int& b) { return a > b ? a : b; }
+double GetMax(const double& a, const double& b) { return a > b ? a : b; }
+std::string GetMax(const std::string& a, const std::string& b) { return a > b ? a : b; }
+// слишком много дублирования
+\end{lstlisting}
+\begin{definition}{Шаблон}{}
+\textbf{Шаблон} --- механизм, позволяющий писать код, параметризованный типом (или значением). Объявляется конструкцией \texttt{template <typename T>} перед определением/объявлением функции или класса.
+\end{definition}
+\begin{implementation}{Шаблонная функция}{}
+\begin{lstlisting}[language=C++]
+template <typename T>
+T GetMax(const T& a, const T& b) {
+    return a > b ? a : b;
+}
+
+int main() {
+    int test = GetMax<int>(1, 2); // явно указали T
+    int test2 = GetMax(1, 2);     // компилятор сам вывел T = int
+}
+\end{lstlisting}
+\end{implementation}
+\textbf{Важные детали:}
+\begin{itemize}
+  \item \texttt{template <typename T>} объявляет шаблонный параметр \texttt{T}, который виден только в следующем за этой строкой объявлении/определении.
+  \item \texttt{T} называется \term{шаблонным параметром}; вместо \texttt{T} может быть любое имя (по código-стайлу --- CamelCase с большой буквы).
+  \item \texttt{typename} и \texttt{class} в контексте шаблонного параметра --- полные синонимы: \texttt{template <class T>} работает так же, как \texttt{template <typename T>}.
+  \item Если для типа не определена нужная операция (например, оператор \texttt{>}), вызов шаблона от такого типа даст CE.
+  \item Если вызвать от разных типов (\texttt{GetMax(1, 2.0)}) без явного указания --- CE, компилятор не умеет сам выводить общий \texttt{T}. Либо указываем тип явно (\texttt{GetMax<double>(1, 2.0)}), либо заводим два шаблонных параметра: \texttt{template <typename T, typename U> T GetMax(const T\& a, const U\& b)}.
+\end{itemize}
+\textbf{Опасный момент:} если шаблон с двумя параметрами возвращает ссылку на один из них, можно получить висячую ссылку из-за неявного приведения:
+\begin{lstlisting}[language=C++]
+template <typename T, typename U>
+const T& GetMax(const T& a, const U& b) {
+    return a > b ? a : b; // b неявно скастуется к T во временный объект
+}
+GetMax(1, 2.0); // UB: вернём ссылку на уже разрушенный временный объект
+\end{lstlisting}
 \subsubsection{Шаблонные функции}
+См. пример \texttt{GetMax} выше --- это и есть шаблонная функция. Шаблонные функции можно перегружать (по тем же общим правилам, что и обычные функции), и компилятор выбирает наиболее подходящую перегрузку (либо нешаблонную, если она точнее подходит).
 \subsubsection{Шаблонные классы}
+Классы тоже могут быть шаблонными:
+\begin{lstlisting}[language=C++]
+template <typename T>
+class Vector {
+ private:
+    T* arr_ = nullptr;
+};
+
+int main() {
+    Vector<int> v; // явно инстанцируем для T = int
+}
+\end{lstlisting}
 \subsubsection{Псевдонимы, константы и методы}
+\textbf{Шаблонные псевдонимы (alias):}
+\begin{lstlisting}[language=C++]
+template <typename T>
+using MyMap = std::map<T, T>;
+
+MyMap<int> map; // синоним для std::map<int, int>
+\end{lstlisting}
+\textbf{Шаблонные константы:}
+\begin{lstlisting}[language=C++]
+template <typename T>
+const T pi = T(3.14);
+\end{lstlisting}
+\textbf{Шаблонные методы} (метод сам по себе шаблонный, даже если класс не шаблонный):
+\begin{lstlisting}[language=C++]
+struct Vector {
+    template <typename U>
+    void push_back(const U&);
+};
+\end{lstlisting}
 \subsubsection{Шаблонные методы шаблонного класса}
+Если шаблонный метод определён внутри шаблонного класса:
+\begin{lstlisting}[language=C++]
+template <typename T>
+struct Vector {
+    template <typename U>
+    void push_back(const U&);
+};
+\end{lstlisting}
+То для определения такого метода \textbf{снаружи} класса нужны два отдельных \texttt{template}-заголовка подряд:
+\begin{lstlisting}[language=C++]
+template <typename T>
+template <typename U>
+void Vector<T>::push_back(const U&) {
+    // ...
+}
+\end{lstlisting}
+\textbf{Важно:} записать это одной строкой (\texttt{template <typename T, typename U>}) нельзя --- компилятор не поймёт, что один параметр относится к классу, а другой к методу.
+\textbf{Замечание:} имена параметров \texttt{T}/\texttt{U} не обязательны, это просто соглашение --- можно называть параметры как угодно, главное чтобы они были согласованы между объявлением в классе и определением снаружи.
 \subsubsection{Non-type template parameters}
+\begin{definition}{Non-type template parameter}{}
+Шаблонный параметр, который сам по себе не тип, а \textbf{значение} (целочисленное, \texttt{bool}, \texttt{char}; начиная с C++20 список расширен).
+\end{definition}
+\begin{implementation}{Массив фиксированного размера}{}
+\begin{lstlisting}[language=C++]
+template <typename T, int N>
+struct Array {
+    T arr_[N];
+};
+
+Array<int, 5> arr1;
+Array<int, 10> arr2;
+// arr2 = arr1; // CE: это РАЗНЫЕ типы (Array<int,5> и Array<int,10>)
+\end{lstlisting}
+\end{implementation}
+\textbf{Зачем нужно:} чтобы типы, инстанцированные от разных значений non-type параметра, были несовместимы друг с другом на уровне системы типов (как в примере выше).
+\textbf{Важное ограничение:} значение non-type template parameter должно быть известно \textbf{на этапе компиляции}:
+\begin{lstlisting}[language=C++]
+int d = 0;
+std::cin >> d;
+// std::array<int, d> arr1; // CE: d не constexpr
+
+int c = 10;
+// std::array<int, c> arr2; // CE: c не constexpr (хоть и не меняется)
+
+const int y = c;
+// std::array<int, y> arr3; // CE: y зависит от неconstexpr c
+
+const int x = 10;
+std::array<int, x> arr4; // OK: x -- настоящая компайл-тайм константа
+\end{lstlisting}
 
 \subsection{Наследование}
 \subsubsection{Общая идея}
+\begin{definition}{Наследование}{}
+\textbf{Наследование} --- концепция ООП, согласно которой новый (производный, \term{Derived}) тип может переиспользовать данные и функциональность уже существующего (базового, \term{Base}) типа.
+\end{definition}
+\begin{implementation}{Пример}{}
+\begin{lstlisting}[language=C++]
+struct Base {
+    int a = 10;
+    void f() { std::cout << 1; }
+};
+
+struct Derived: Base {
+    int b = 20;
+    void g() { std::cout << 2; }
+};
+
+int main() {
+    Derived d;
+    d.f();        // унаследованный метод
+    d.g();
+    std::cout << d.a; // унаследованное поле
+    std::cout << d.b;
+}
+\end{lstlisting}
+\end{implementation}
+Модификатор наследования задаётся синтаксисом \texttt{struct Derived: public Base \{ ... \};} (бывает \texttt{public}, \texttt{protected}, \texttt{private} --- подробный разбор всех трёх в секции "на хор"). \textbf{Важно для уд:} как и с модификаторами доступа, у \texttt{struct} наследование по умолчанию \texttt{public}, у \texttt{class} --- \texttt{private}.
 \subsubsection{Видимость и доступность при публичном наследовании}
+При \textbf{публичном} наследовании модификаторы доступа полей и методов родителя в наследнике не меняются: что было \texttt{public} --- остаётся \texttt{public}, что было \texttt{protected} --- остаётся \texttt{protected}; к \texttt{private}-членам родителя наследник обратиться не может никогда, даже при публичном наследовании.
+\begin{implementation}{Переопределение метода (не виртуальное)}{}
+\begin{lstlisting}[language=C++]
+struct Base {
+    void foo() { std::cout << 1; }
+};
+struct Derived: Base {
+    void foo() { std::cout << 2; }
+};
+
+int main() {
+    Derived d; d.foo(); // 2 -- вызвался foo из Derived
+    Base b;    b.foo(); // 1
+}
+\end{lstlisting}
+\end{implementation}
+\textbf{С полями} ситуация аналогичная --- побеждает версия из Derived, но при этом в объекте Derived хранятся \textbf{оба} поля (родительское не пропадает, просто "затеняется"):
+\begin{lstlisting}[language=C++]
+struct Base { int x = 1; };
+struct Derived: Base { int x = 2; };
+
+int main() {
+    Derived d;
+    d.x;        // 2 -- выбирается ближайшее по иерархии
+    d.Base::x;  // 1 -- явно обращаемся к полю родителя
+    sizeof(d);  // 8, потому что хранятся два int
+}
+\end{lstlisting}
+\textbf{Важная ловушка с перегрузкой методов:} если в Derived объявлена функция \texttt{foo} с другой сигнатурой, она \textbf{полностью затеняет} (не перегружает!) все версии \texttt{foo} из Base --- поиск имени останавливается на первом классе, где имя найдено:
+\begin{lstlisting}[language=C++]
+struct Base {
+    void foo() { std::cout << 1; }
+};
+struct Derived: Base {
+    void foo(int) { std::cout << 2; }
+};
+
+int main() {
+    Derived d;
+    d.foo(); // CE! foo(int) затенил foo() -- компилятор даже не смотрит в Base
+}
+\end{lstlisting}
+Это можно починить, "введя" имя родителя в область видимости через \texttt{using}:
+\begin{lstlisting}[language=C++]
+struct Base {
+ protected:
+    void foo() { std::cout << 1; }
+};
+struct Derived: Base {
+    using Base::foo; // теперь foo() из Base снова видна в Derived
+    void foo(int) { std::cout << 2; }
+};
+\end{lstlisting}
+\textbf{Замечание:} это сработает, только если у самого Derived есть доступ к \texttt{foo} (protected/public); при этом \texttt{using} может ещё и "повысить" доступность метода (например, вывести protected-метод родителя в public).
 \subsubsection{Порядок вызова конструкторов/деструкторов}
+При создании объекта Derived первым делом неявно создаётся подобъект Base (если явно не указано, какой конструктор Base вызывать, используется его конструктор по умолчанию):
+\begin{lstlisting}[language=C++]
+struct Base {
+    Base() { std::cout << "Base "; }
+};
+struct Derived: Base {
+    Derived() { std::cout << "Derived "; }
+};
+
+int main() {
+    Derived d; // выведет: "Base Derived "
+}
+\end{lstlisting}
+\textbf{Полный порядок} (поля + наследование вместе, деструкторы --- строго в обратном порядке):
+\begin{implementation}{Полный пример}{}
+\begin{lstlisting}[language=C++]
+struct A { A() { std::cout << "A\n"; } ~A() { std::cout << "~A\n"; } };
+struct B { B() { std::cout << "B\n"; } ~B() { std::cout << "~B\n"; } };
+
+struct Base {
+    Base() { std::cout << "Base\n"; }
+    ~Base() { std::cout << "~Base\n"; }
+    A a;
+};
+
+struct Derived: Base {
+    Derived() { std::cout << "Derived\n"; }
+    ~Derived() { std::cout << "~Derived\n"; }
+    B b;
+};
+
+int main() {
+    Derived d;
+}
+// Создание: A, Base, B, Derived
+// Уничтожение (Derived d выходит из scope): ~Derived, ~B, ~Base, ~A
+\end{lstlisting}
+\end{implementation}
 \subsubsection{Приведение типов при публичном наследовании}
+Публичное наследование позволяет приводить объект-наследник к объекту-родителю ("каст вверх", upcast):
+\begin{lstlisting}[language=C++]
+struct Base { int x; };
+struct Derived: Base { int y; };
+
+int main() {
+    Derived d;
+    Base b = d;   // (1) копия подобъекта Base -- срезка, см. ниже
+    Base& bb = d; // (2) просто ссылка на Base-часть внутри d, без копирования
+}
+\end{lstlisting}
+\textbf{Замечание:} при \texttt{private}/\texttt{protected} наследовании такой каст уже не работает --- факт наследования "не виден" снаружи.
+\textbf{Каст вниз (obratно, от Base к Derived):} кастовать можно только указатели/ссылки (сконструировать новый Derived из готового Base некуда взять недостающие данные). С текущим уровнем знаний (без виртуальных функций) понять, действительно ли объект под Base на самом деле является Derived, мы не можем --- такой каст потенциально UB:
+\begin{lstlisting}[language=C++]
+int main() {
+    Base b;
+    Derived& d = static_cast<Derived&>(b); // UB: b в реальности не Derived
+}
+\end{lstlisting}
+Но если объект изначально и правда был Derived (просто на него смотрели через Base\&/Base*), каст вниз безопасен:
+\begin{lstlisting}[language=C++]
+int main() {
+    Derived d;
+    Base& b_ref = d;
+    Derived& d_ref = static_cast<Derived&>(b_ref); // OK, b_ref реально ссылается на Derived
+}
+\end{lstlisting}
 \subsubsection{Срезка при копировании}
+\begin{definition}{Срезка (slicing)}{}
+\textbf{Срезка при копировании} --- ситуация \texttt{Base b = d;}, где \texttt{d} имеет тип Derived: компилятор конструирует \textbf{новый} объект типа Base из подобъекта Base, лежащего внутри \texttt{d}, и вся "наследная" часть (поля и переопределённое поведение Derived) теряется.
+\end{definition}
+\textbf{Проблема:} это легко делает код некорректным, если Base поддерживает операцию, нелогичную для Derived (классический пример: \texttt{Rectangle} наследует \texttt{Polygon}, у которого есть метод "сдвинуть произвольную вершину" --- для прямоугольника это не имеет смысла после среза он уже просто "многоугольник").
+\begin{definition}{Принцип подстановки Барбары Лисков (LSP)}{}
+Пусть $q(x)$ --- свойство, верное для объектов $x$ типа T. Тогда $q(y)$ должно быть верно и для объектов $y$ подтипа S типа T. Простыми словами: код, ожидающий Base, должен продолжать корректно работать, если ему передать Derived.
+\end{definition}
+\textbf{Замечание:} LSP --- это буква L в принципах SOLID (наряду с SRP, OCP, ISP, DIP). К срезке это имеет прямое отношение: если из-за среза поведение Derived "ломается" до поведения голого Base, скорее всего иерархия спроектирована неудачно.
 
 \subsection{Динамический полиморфизм}
 \subsubsection{Идея и простой пример}
+\begin{definition}{Полиморфизм}{}
+\textbf{Полиморфизм} --- способность за одним и тем же интерфейсом скрывать разные реализации, выбирая нужную для конкретного типа данных.
+\end{definition}
+\textbf{Статический полиморфизм} мы уже видели: это перегрузка функций и шаблоны --- выбор реализации происходит на этапе компиляции.
+\textbf{Динамический полиморфизм} --- выбор реализации происходит в рантайме, в зависимости от реального (динамического) типа объекта. Проблема без виртуальных функций:
+\begin{lstlisting}[language=C++]
+struct Animal {
+    void Say() { std::cout << "Abstract animal don't speak\n"; }
+};
+struct Dog: Animal {
+    void Say() { std::cout << "Woof woof\n"; }
+};
+
+void MakeAnimalTalk(Animal& animal) {
+    animal.Say();
+}
+
+int main() {
+    Dog d;
+    MakeAnimalTalk(d); // "Abstract animal don't speak" -- НЕ то, что хотели
+}
+\end{lstlisting}
+Компилятор на этапе компиляции знает только статический тип параметра (\texttt{Animal\&}), поэтому вызывает \texttt{Animal::Say}, даже если реально передали \texttt{Dog}.
 \subsubsection{Виртуальные функции}
+\begin{definition}{Виртуальная функция}{}
+Метод, помеченный ключевым словом \texttt{virtual}, для которого выбор конкретной реализации откладывается до рантайма и определяется \textbf{реальным} (динамическим) типом объекта, а не статическим типом ссылки/указателя.
+\end{definition}
+\begin{implementation}{Исправленный пример}{}
+\begin{lstlisting}[language=C++]
+struct Animal {
+    virtual void Say() { std::cout << "Abstract animal don't speak\n"; }
+};
+struct Dog: Animal {
+    void Say() { std::cout << "Woof woof\n"; }
+};
+struct Cat: Animal {
+    void Say() { std::cout << "Meow\n"; }
+};
+
+void MakeAnimalTalk(Animal& animal) {
+    animal.Say();
+}
+
+int main() {
+    Dog d; MakeAnimalTalk(d); // Woof woof
+    Cat c; MakeAnimalTalk(c); // Meow
+}
+\end{lstlisting}
+\end{implementation}
+\textbf{Важные замечания:}
+\begin{itemize}
+  \item Писать \texttt{virtual} обязательно (и достаточно) только в \textbf{первом} объявлении метода (в самом базовом классе); в наследниках метод с той же сигнатурой автоматически остаётся виртуальным, даже без явного \texttt{virtual}.
+  \item Если написать \texttt{virtual} только в наследнике (не в базовом классе) --- виртуальным метод станет лишь для наследников \textit{этого} класса, а не для всей иерархии сверху.
+  \item Динамический полиморфизм работает как со ссылками, так и с указателями на базовый класс (но не с объектами по значению --- там сработает срезка).
+  \item Механизм виртуальных функций требует \textbf{полного} совпадения сигнатуры в наследнике (включая \texttt{const}), иначе это будет просто новый, невиртуальный метод, который затенит родительский (см. видимость при наследовании). Чтобы не ошибиться, используют \texttt{override} --- если сигнатура не совпала с какой-либо виртуальной функцией родителя, будет CE.
+\end{itemize}
 \subsubsection{Абстрактные классы и чисто виртуальные функции}
+\begin{definition}{Чисто виртуальная функция}{}
+Виртуальная функция без реализации в классе, объявленная как \texttt{virtual void Say() = 0;}. Класс, в котором есть хотя бы одна чисто виртуальная функция, называется \term{абстрактным}.
+\end{definition}
+\begin{implementation}{Animal как интерфейс}{}
+\begin{lstlisting}[language=C++]
+struct Animal {
+    virtual void Say() = 0; // чисто виртуальная
+};
+struct Dog: Animal {
+    void Say() override { std::cout << "Woof woof\n"; }
+};
+struct Cat: Animal {
+    void Say() override { std::cout << "Meow\n"; }
+};
+\end{lstlisting}
+\end{implementation}
+\textbf{Свойства абстрактного класса:}
+\begin{enumerate}
+  \item Создать объект абстрактного класса напрямую нельзя --- CE.
+  \item Заводить указатели и ссылки на абстрактный класс можно (и в этом весь смысл --- работать с интерфейсом).
+  \item Если наследник не переопределил \textbf{все} чисто виртуальные методы родителя, он тоже остаётся абстрактным.
+\end{enumerate}
+\textbf{Замечание:} у чисто виртуальной функции всё же можно написать реализацию (определить её вне класса) --- но класс от этого не перестаёт быть абстрактным, эта реализация просто доступна для явного вызова из наследников:
+\begin{lstlisting}[language=C++]
+struct Animal {
+    virtual void Say() = 0;
+};
+void Animal::Say() { std::cout << "..."; } // можно вызвать как Animal::Say() из наследника
+\end{lstlisting}
 \subsubsection{Проблема виртуального деструктора}
+\begin{implementation}{Утечка без виртуального деструктора}{}
+\begin{lstlisting}[language=C++]
+struct Base {};
+
+struct Derived: Base {
+    Derived() { array = new int[10]; }
+    int* array;
+};
+
+int main() {
+    Base* b = new Derived();
+    delete b; // вызовется только ~Base(), ~Derived() НЕ вызовется -- утечка array!
+}
+\end{lstlisting}
+\end{implementation}
+\textbf{Причина:} без \texttt{virtual} оператор \texttt{delete} применяет деструктор статического типа указателя (\texttt{Base*}), а не реального типа объекта (\texttt{Derived}).
+\textbf{Решение:} если планируется удалять наследников через указатель на базовый класс, деструктор базового класса нужно делать виртуальным:
+\begin{lstlisting}[language=C++]
+struct Base {
+    virtual ~Base() = default; // теперь все потомки получают виртуальный деструктор
+};
+
+struct Derived: Base {
+    Derived() { array = new int[10]; }
+    ~Derived() { delete[] array; }
+    int* array;
+};
+
+int main() {
+    Base* b = new Derived();
+    delete b; // теперь корректно вызовутся ~Derived(), потом ~Base()
+}
+\end{lstlisting}
+\textbf{Правило:} если у класса есть хотя бы одна виртуальная функция (то есть он явно спроектирован под полиморфное использование), деструктор у него почти всегда тоже стоит делать виртуальным.
 
 \subsection{Лямбда-функции}
 \subsubsection{Основная идея и синтаксис}
+\begin{definition}{Лямбда-функция}{}
+\textbf{Лямбда-функция} --- способ объявить "временную", безымянную функцию прямо в месте использования, без отдельного объявления именованной функции или функтора.
+\end{definition}
+\textbf{Проблема:} раньше для передачи произвольного поведения (например, кастомного компаратора) приходилось заводить отдельную структуру с \texttt{operator()}:
+\begin{lstlisting}[language=C++]
+struct Cmp {
+    bool operator()(int x, int y) const { return x % 10 < y % 10; }
+};
+
+int main() {
+    std::vector<int> v{1, 12, 1241, 124};
+    std::sort(v.begin(), v.end(), Cmp());
+}
+\end{lstlisting}
+С лямбдой то же самое можно написать прямо на месте вызова:
+\begin{lstlisting}[language=C++]
+int main() {
+    std::vector<int> v{1, 12, 1241, 124};
+    std::sort(v.begin(), v.end(), [](int x, int y) { return x % 10 < y % 10; });
+}
+\end{lstlisting}
+\textbf{Синтаксис:} \texttt{[список\_захвата](параметры) -> возвращаемый\_тип \{ тело \}}. Список захвата (\texttt{[]}) подробно разбирается в секции "на хор".
 \subsubsection{Примеры}
+Лямбду можно сохранить в переменную (тип лямбды компилятор генерирует сам и явно его не назвать, поэтому используют \texttt{auto}):
+\begin{lstlisting}[language=C++]
+int main() {
+    auto f = [](int x, int y) { return x % 10 < y % 10; };
+    f(1, 2);
+}
+\end{lstlisting}
+Можно вызвать лямбду сразу, не сохраняя в переменную:
+\begin{lstlisting}[language=C++]
+int main() {
+    [](int x) { std::cout << x; }(10); // выведет 10
+}
+\end{lstlisting}
+Можно возвращать лямбду из функции (\texttt{auto} работает и как возвращаемый тип функции):
+\begin{lstlisting}[language=C++]
+auto GetCompare() {
+    return [](int x, int y) { return x % 10 < y % 10; };
+}
+\end{lstlisting}
+\textbf{Возвращаемый тип лямбды} выводится по тем же правилам, что и для \texttt{auto} (фактически --- по правилам вывода шаблонного типа), но его можно указать и явно через trailing return type:
+\begin{lstlisting}[language=C++]
+auto f = [](int x, int y) -> bool { return x % 10 < y % 10; };
+\end{lstlisting}
 
 \subsection{Исключения}
 \subsubsection{Идея и примеры использования}
+\begin{definition}{Исключение}{}
+\textbf{Исключение} --- механизм сообщить об ошибке (нештатной ситуации), который "разматывает" стек вызовов до ближайшего места, готового эту ошибку обработать, минуя весь промежуточный код.
+\end{definition}
+\textbf{Проблема, которую решают исключения:} без них об ошибке обычно сообщают через возвращаемое значение (например, специальный код ошибки или \texttt{bool}), но это легко проигнорировать, и ошибку приходится протаскивать через весь стек вызовов вручную.
+\begin{implementation}{Базовый пример}{}
+\begin{lstlisting}[language=C++]
+double Divide(double a, double b) {
+    if (b == 0) {
+        throw std::runtime_error("division by zero");
+    }
+    return a / b;
+}
+
+int main() {
+    try {
+        std::cout << Divide(10, 0);
+    } catch (const std::runtime_error& e) {
+        std::cout << "Error: " << e.what();
+    }
+}
+\end{lstlisting}
+\end{implementation}
+\textbf{Как это работает:}
+\begin{itemize}
+  \item \texttt{throw obj;} кидает исключение (объект произвольного типа, но обычно --- наследник \texttt{std::exception}).
+  \item Управление сразу передаётся вверх по стеку вызовов, минуя весь промежуточный код, пока не найдётся подходящий \texttt{catch}.
+  \item \texttt{try \{ ... \} catch (Type\& e) \{ ... \}} --- блок \texttt{try} оборачивает код, который может кинуть исключение; \texttt{catch} перехватывает исключения подходящего типа.
+  \item Если ни один \texttt{catch} не подошёл (исключение никто не поймал), вызывается \texttt{std::terminate} --- программа аварийно завершается.
+\end{itemize}
 \subsubsection{Разница между исключениями и RE}
+\begin{center}
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Исключение} & \textbf{RE (Runtime Error)} \\
+\hline
+Контролируемая, ожидаемая программистом ситуация & Неконтролируемая ошибка (segfault, деление на 0 и т.п.) \\
+\hline
+Можно поймать и обработать (\texttt{try}/\texttt{catch}) & Нельзя поймать стандартными средствами C++ \\
+\hline
+Программа продолжает работать после обработки & Программа аварийно завершается \\
+\hline
+Бросается явно через \texttt{throw} & Возникает из-за UB/ошибки рантайма (не явный throw) \\
+\hline
+\end{tabular}
+\end{center}
+\textbf{Кратко:} исключение --- это запланированный программистом способ сообщить об ошибке и дать вызывающему коду шанс её обработать. RE --- это, как правило, неожиданный крах программы (например, segmentation fault), который исключением не является и поймать его нельзя.
 \subsubsection{Exception-safety}
+\begin{definition}{Exception-safety}{}
+\textbf{Exception-safety} (безопасность относительно исключений) --- свойство кода корректно вести себя, если в середине его выполнения вылетело исключение: не оставлять программу в невалидном состоянии (утечки памяти, испорченные инварианты объектов).
+\end{definition}
+Выделяют несколько уровней (гарантий) exception-safety:
+\begin{itemize}
+  \item \textbf{No-throw guarantee} --- операция гарантированно никогда не бросает исключений (например, деструкторы, \texttt{swap}).
+  \item \textbf{Strong guarantee} (строгая гарантия) --- если операция бросила исключение, состояние программы остаётся таким же, как до её начала (как будто операции и не было). Классически достигается идиомой copy-and-swap.
+  \item \textbf{Basic guarantee} (базовая гарантия) --- если операция бросила исключение, программа остаётся в каком-то корректном (валидном), но не обязательно предсказуемом состоянии: утечек нет, инварианты не нарушены, но точное содержимое объекта не определено.
+  \item \textbf{No guarantee} --- при исключении возможно всё, вплоть до утечек и испорченных инвариантов; такого стоит избегать.
+\end{itemize}
+\textbf{Замечание:} тесно связано с идиомой RAII (см. секцию "на хор") --- если ресурсы освобождаются в деструкторах, то даже при вылете исключения посреди функции стек "размотается" и все локальные объекты корректно разрушатся, освободив ресурсы.
 
 \subsection{Итераторы}
 \subsubsection{Идея и синтаксис использования}
+\begin{definition}{Итератор}{}
+\textbf{Итератор} --- это то, что ведёт себя как итератор: его можно разыменовать (\texttt{*it}) и можно сдвинуть (\texttt{++it}). Формально, конкретный набор требований зависит от категории итератора (см. ниже). C-style указатель, по сути, и есть простейший итератор.
+\end{definition}
+\begin{implementation}{Базовое использование}{}
+\begin{lstlisting}[language=C++]
+std::vector<int> v = {1, 2, 3};
+for (std::vector<int>::iterator it = v.begin(); it != v.end(); ++it) {
+    std::cout << *it << " ";
+}
+\end{lstlisting}
+\end{implementation}
+\textbf{Замечание:} \texttt{v.end()} --- специальный итератор, указывающий на "элемент, следующий за последним"; разыменовывать его --- UB.
+\textbf{Зачем нужна абстракция итератора:} далеко не у всех контейнеров есть оператор \texttt{[]} (например, у \texttt{std::list}), но \texttt{begin()}/\texttt{end()} есть у всех стандартных контейнеров --- поэтому через итераторы можно единообразно обходить любой контейнер:
+\begin{lstlisting}[language=C++]
+std::list<int> v = {1, 2, 3};
+for (std::list<int>::iterator it = v.begin(); it != v.end(); ++it) {
+    std::cout << *it << " ";
+}
+// v[0]; -- CE, у list нет operator[]
+\end{lstlisting}
 \subsubsection{Range-based for}
+\begin{lstlisting}[language=C++]
+std::list<int> v = {1, 2, 3};
+for (int x : v) {
+    std::cout << x << " ";
+}
+\end{lstlisting}
+Это синтаксический сахар, который компилятор разворачивает примерно в:
+\begin{lstlisting}[language=C++]
+std::list<int> v = {1, 2, 3};
+for (auto it = v.begin(); it != v.end(); ++it) {
+    int x = *it;
+    std::cout << x << " ";
+}
+\end{lstlisting}
+\textbf{Замечание:} вместо явного указания типа цикла лучше всегда использовать \texttt{auto} (или \texttt{auto\&}/\texttt{const auto\&}, если не хотим копировать элемент).
 \subsubsection{Виды итераторов и операции}
+Итераторы делятся на категории в зависимости от того, какие операции они поддерживают (от самых слабых к самым сильным гарантиям):
+\begin{itemize}
+  \item \textbf{Input iterator} --- можно читать (\texttt{*it}) и двигать вперёд (\texttt{++it}), однопроходный (прочитанное значение нельзя перечитать повторно).
+  \item \textbf{Output iterator} --- можно только записывать через \texttt{*it = value} и двигать вперёд.
+  \item \textbf{Forward iterator} --- как input, но можно проходить по диапазону многократно (например, \texttt{std::forward\_list}).
+  \item \textbf{Bidirectional iterator} --- forward + можно двигаться назад (\texttt{--it}); пример: \texttt{std::list}, \texttt{std::map}.
+  \item \textbf{Random access iterator} --- bidirectional + произвольный доступ за O(1): \texttt{it + n}, \texttt{it[n]}, \texttt{it1 - it2}; пример: \texttt{std::vector}, \texttt{std::deque}.
+\end{itemize}
+\textbf{Важно:} категория итератора --- это не отдельный класс, а набор гарантированных операций; чем "сильнее" категория, тем больше операций поддерживает итератор (random access поддерживает вообще всё, что input).
+\begin{implementation}{Псевдокод: итератор для своего Vector}{}
+Чтобы свой контейнер поддерживал \texttt{begin()}/\texttt{end()} и range-based for, достаточно написать маленький класс-обёртку над указателем:
+\begin{lstlisting}[language=C++]
+template <typename T>
+class Vector {
+ public:
+    class Iterator {
+     public:
+        Iterator(T* ptr): ptr_(ptr) {}
+
+        T& operator*() const { return *ptr_; }
+        T* operator->() const { return ptr_; }
+
+        Iterator& operator++() { ++ptr_; return *this; }      // префиксный
+        Iterator operator++(int) { Iterator tmp = *this; ++ptr_; return tmp; } // постфиксный
+
+        bool operator==(const Iterator& other) const { return ptr_ == other.ptr_; }
+        bool operator!=(const Iterator& other) const { return ptr_ != other.ptr_; }
+     private:
+        T* ptr_;
+    };
+
+    Iterator begin() { return Iterator(arr_); }
+    Iterator end() { return Iterator(arr_ + size_); }
+ private:
+    T* arr_ = nullptr;
+    size_t size_ = 0;
+};
+\end{lstlisting}
+\end{implementation}
+\textbf{Суть:} итератор --- это просто обёртка вокруг указателя (или другого механизма перемещения по структуре), реализующая \texttt{operator*}, \texttt{operator++} и \texttt{operator==}/\texttt{operator!=}. Именно поэтому он "ведёт себя как указатель" --- по факту он его и оборачивает.
 
 \subsection{Стандартные контейнеры}
 \subsubsection{\texttt{vector}, \texttt{list}, \texttt{deque}, \texttt{unordered\_map}, \texttt{map}, \texttt{set}}
+Контейнеры стандартной библиотеки делятся на две большие группы: \term{последовательные} (vector, list, deque, forward\_list) и \term{ассоциативные} (map, set, unordered\_map, unordered\_set). Отдельно стоят \term{адаптеры} --- обёртки над контейнерами (stack, queue, priority\_queue).
+\begin{itemize}
+  \item \textbf{std::vector} --- динамический массив, элементы лежат непрерывно в памяти. Итератор категории Contiguous (фактически random access).
+  \item \textbf{std::deque} --- двусторонняя очередь, хранит элементы "бакетами"; поддерживает быструю вставку и в начало, и в конец. Итератор --- random access.
+  \item \textbf{std::list} --- двусвязный список. Итератор --- bidirectional.
+  \item \textbf{std::map} --- отсортированный по ключу ассоциативный контейнер (обычно реализован через красно-чёрное дерево). Итератор --- bidirectional.
+  \item \textbf{std::set} --- по сути \texttt{std::map} без значения, только ключи.
+  \item \textbf{std::unordered\_map} --- ассоциативный контейнер на основе хэш-таблицы. Итератор --- forward.
+  \item \textbf{std::unordered\_set} --- \texttt{std::unordered\_map} без значения.
+\end{itemize}
+\textbf{Замечание:} есть ещё \texttt{multimap}/\texttt{multiset} --- то же самое, но допускают повторяющиеся ключи.
 \subsubsection{Основные методы и их асимптотика}
+\begin{center}
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Контейнер} & \textbf{Метод} & \textbf{Сложность} \\
+\hline
+\texttt{vector} & \texttt{at}/\texttt{[]}, \texttt{front}/\texttt{back} & O(1) \\
+\texttt{vector} & \texttt{push\_back}/\texttt{emplace\_back} & амортизированно O(1) \\
+\texttt{vector} & \texttt{pop\_back} & O(1) (UB на пустом) \\
+\texttt{vector} & \texttt{insert}/\texttt{erase} (по итератору) & O(n) (сдвиг хвоста) \\
+\hline
+\texttt{deque} & \texttt{at}/\texttt{[]}, \texttt{front}/\texttt{back} & O(1) \\
+\texttt{deque} & \texttt{push\_back}/\texttt{push\_front} & амортизированно O(1) \\
+\texttt{deque} & \texttt{insert}/\texttt{erase} (по итератору) & O(n) \\
+\hline
+\texttt{list} & \texttt{front}/\texttt{back} & O(1) \\
+\texttt{list} & \texttt{push\_back}/\texttt{push\_front} & O(1) \\
+\texttt{list} & \texttt{insert}/\texttt{erase} (по итератору) & O(1) \\
+\hline
+\texttt{map}/\texttt{set} & \texttt{find}, \texttt{insert}, \texttt{erase} & O($\log n$) \\
+\texttt{map} & \texttt{operator[]} (создаёт элемент, если нет) & O($\log n$) \\
+\texttt{map} & \texttt{at} (кидает исключение, если нет ключа) & O($\log n$) \\
+\hline
+\texttt{unordered\_map}/\texttt{set} & \texttt{find}, \texttt{insert}, \texttt{erase} & O(1) амортиз. (нечестно, см. ниже) \\
+\hline
+\end{tabular}
+\end{center}
+\textbf{Важно:} O(1) для \texttt{unordered\_map}/\texttt{unordered\_set} --- "нечестная" асимптотика: это средний случай (amortized average case) при хорошем хэше; в худшем случае (много коллизий) операции деградируют до O(n).
+\textbf{Различие \texttt{operator[]} и \texttt{at} у \texttt{map}/\texttt{unordered\_map}:} \texttt{[]} модифицирует контейнер --- если ключа нет, он создаст пару (ключ, \texttt{Value()}); \texttt{at} же при отсутствии ключа кидает исключение и контейнер не меняет.
 \subsubsection{Адаптеры (на примере \texttt{std::stack})}
+\begin{definition}{Адаптер контейнера}{}
+\textbf{Адаптер} --- обёртка над уже существующим контейнером, которая предоставляет ограниченный, специфичный интерфейс (например, только LIFO для стека), переиспользуя методы контейнера внутри себя.
+\end{definition}
+В STL есть три адаптера: \texttt{std::stack}, \texttt{std::queue}, \texttt{std::priority\_queue}.
+\begin{implementation}{Устройство std::stack}{}
+По умолчанию \texttt{std::stack} использует внутри себя \texttt{std::deque} (но можно подставить любой контейнер, поддерживающий \texttt{push\_back}/\texttt{pop\_back}/\texttt{back}, например \texttt{std::vector} или \texttt{std::list}):
+\begin{lstlisting}[language=C++]
+template <typename T, typename Container = std::deque<T>>
+class stack {
+ public:
+    void push(const T& value) { c_.push_back(value); }
+    void pop() { c_.pop_back(); }
+    T& top() { return c_.back(); }
+ private:
+    Container c_;
+};
+
+int main() {
+    std::stack<int, std::vector<int>> s; // подставили свой контейнер
+}
+\end{lstlisting}
+\end{implementation}
+То есть адаптер сам по себе не хранит данные напрямую --- он просто переиспользует методы того контейнера, который лежит у него внутри.
 
 \subsection{Move-семантика}
 \subsubsection{Проблема и решение}
+\textbf{Проблема:} классический \texttt{swap} через копии делает три полноценных копии объекта:
+\begin{lstlisting}[language=C++]
+template <typename T>
+void swap(T& first, T& second) {
+    T tmp = first;   // копия
+    first = second;  // копия
+    second = tmp;    // копия
+}
+\end{lstlisting}
+Для тяжёлого объекта (например, большого \texttt{std::vector}) это три линейных прохода, хотя по сути нам нужно было просто "переложить" внутренности объектов местами, ничего не копируя. Та же проблема возникает при передаче временных объектов в контейнеры:
+\begin{lstlisting}[language=C++]
+std::vector<std::string> v;
+v.push_back(std::string("test")); // временная строка создаётся, а потом ещё и копируется внутрь вектора
+\end{lstlisting}
+\textbf{Решение:} move-семантика --- возможность "забирать" ресурсы у объекта, который нам больше не нужен (временный объект, либо объект, который мы сами разрешили "обокрасть"), вместо того чтобы их копировать.
 \subsubsection{Использование \texttt{std::move}}
+\begin{definition}{std::move}{}
+\texttt{std::move(x)} ничего не перемещает сам по себе --- это просто приведение \texttt{x} к rvalue-ссылке, то есть способ сказать компилятору "из этого объекта можно забрать ресурсы, мне он больше не нужен в исходном виде".
+\end{definition}
+\begin{implementation}{swap через move}{}
+\begin{lstlisting}[language=C++]
+template <typename T>
+void swap(T& first, T& second) {
+    T tmp = std::move(first);
+    first = std::move(second);
+    second = std::move(tmp);
+}
+\end{lstlisting}
+\end{implementation}
+Для типов, у которых определена move-семантика (movable-типы, например \texttt{std::string}, \texttt{std::vector}), это теперь работает за O(1) вместо O(n).
+\textbf{Важные замечания:}
+\begin{itemize}
+  \item Если просто вызвать \texttt{std::move(object)} и никуда не присвоить результат --- ничего не произойдёт, \texttt{object} останется таким же, как был (move случается только в момент, когда rvalue-ссылка реально "забирается" move-конструктором/move-присваиванием).
+  \item Все стандартные типы гарантируют, что после \texttt{auto x = std::move(y);} объект \texttt{y} остаётся в валидном (обычно пустом) состоянии --- с ним можно безопасно работать дальше (например, присвоить новое значение), просто не стоит полагаться на его старое содержимое.
+\end{itemize}
 \subsubsection{Move-конструкторы и оператор перемещающего присваивания (на примере \texttt{std::string})}
+\begin{definition}{Move-конструктор}{}
+Конструктор, принимающий rvalue-ссылку на объект того же типа (\texttt{T(T\&\& other)}) и "забирающий" его внутренние ресурсы вместо их копирования.
+\end{definition}
+\begin{implementation}{Move-конструктор String}{}
+\begin{lstlisting}[language=C++]
+class String {
+ public:
+    String(String&& s): str_(s.str_), size_(s.size_) {
+        s.str_ = nullptr; // обнуляем донора, чтобы не было двойного владения
+        s.size_ = 0;       // оставляем донора в валидном пустом состоянии
+    }
+ private:
+    char* str_ = nullptr;
+    size_t size_ = 0;
+};
+\end{lstlisting}
+\end{implementation}
+\textbf{Разбор по шагам:}
+\begin{enumerate}
+  \item \texttt{String\&\&} --- rvalue-ссылка на \texttt{String} (подробный разбор lvalue/rvalue --- в секции "на хор").
+  \item \texttt{str\_(s.str\_), size\_(s.size\_)} --- "забираем" указатель и размер у объекта-донора \texttt{s}.
+  \item \texttt{s.str\_ = nullptr;} --- обязательно обнуляем указатель донора, иначе при разрушении \texttt{s} случится double free (оба объекта будут думать, что владеют одной и той же памятью).
+  \item \texttt{s.size\_ = 0;} --- оставляем донора в корректном, пустом состоянии.
+\end{enumerate}
+\textbf{Move-оператор присваивания} удобно выразить через уже написанный move-конструктор и \texttt{swap}:
+\begin{lstlisting}[language=C++]
+String& operator=(String&& s) {
+    String tmp = std::move(s); // воспользовались move-конструктором
+    swap(tmp);                  // обменялись внутренностями с временным объектом
+    return *this;
+} // старые ресурсы *this уничтожатся вместе с tmp при выходе из функции
+\end{lstlisting}
 \subsubsection{Правило пяти}
+\begin{definition}{Правило пяти}{}
+Расширение правила трёх: если классу понадобился нетривиальный деструктор, конструктор копирования или оператор присваивания копированием --- скорее всего, понадобятся и move-конструктор, и move-оператор присваивания. Это снова словесное правило, а не требование компилятора.
+\end{definition}
+\textbf{Автогенерация:} move-конструктор генерируется компилятором автоматически, только если одновременно выполняется всё:
+\begin{itemize}
+  \item нет пользовательского move-конструктора;
+  \item нет пользовательского конструктора копирования;
+  \item нет пользовательского оператора присваивания копированием;
+  \item нет пользовательского move-оператора присваивания;
+  \item нет пользовательского деструктора.
+\end{itemize}
+(Аналогично для move-оператора присваивания.) То есть как только вы написали \textbf{любой} из этих пяти методов, автогенерация move-операций пропадает, и компилятор при попытке "мува" объекта молча откатится к копированию (если конструктор копирования ещё доступен) либо выдаст CE.
+\textbf{Важная ловушка:} даже если move-конструктор сгенерирован автоматически, он просто мувает каждое поле по отдельности. Если поле --- "тривиальный" тип вроде указателя, \texttt{std::move} от него --- это просто копия значения указателя:
+\begin{lstlisting}[language=C++]
+class String {
+ public:
+    String(String&& s) {
+        str_ = std::move(s.str_);   // для char* это просто копия указателя!
+        size_ = std::move(s.size_); // для size_t это тоже просто копия
+    }                                 // s.str_ НЕ обнулился -- при разрушении s случится double free
+ private:
+    char* str_ = nullptr;
+    size_t size_ = 0;
+};
+\end{lstlisting}
+Поэтому move-конструктор для классов, владеющих "сырыми" ресурсами (указателями), почти всегда нужно писать руками, явно обнуляя поля донора.
 \subsubsection{Правильная реализация \texttt{swap}}
+Эталонная реализация \texttt{swap} для собственного класса с динамической памятью (например, для самописного \texttt{Vector}) должна обмениваться внутренними полями напрямую, без единого копирования:
+\begin{implementation}{swap для Vector}{}
+\begin{lstlisting}[language=C++]
+template <typename T>
+class Vector {
+ public:
+    void swap(Vector& other) noexcept {
+        std::swap(arr_, other.arr_);
+        std::swap(size_, other.size_);
+        std::swap(capacity_, other.capacity_);
+    }
+ private:
+    T* arr_ = nullptr;
+    size_t size_ = 0;
+    size_t capacity_ = 0;
+};
+\end{lstlisting}
+\end{implementation}
+\textbf{Важно:} \texttt{swap} --- это как раз тот метод, который должен давать no-throw гарантию (помечается \texttt{noexcept}), потому что на нём строится идиома copy-and-swap для exception-safe оператора присваивания (см. правило трёх).
 
 \subsection{Умные указатели}
 \subsubsection{Идея}
+\begin{definition}{Умный указатель}{}
+\textbf{Умный указатель} --- объект-обёртка над "сырым" указателем, который следит за временем жизни ресурса и сам освобождает его в деструкторе. Построен на идиоме RAII (см. секцию "на хор").
+\end{definition}
+\textbf{Проблема, которую решают умные указатели:}
+\begin{lstlisting}[language=C++]
+void f(int x) {
+    int* p = new int(1000);
+    if (x == 0) {
+        throw 1; // если кинули исключение, delete p ниже никогда не выполнится -- утечка!
+    }
+    delete p;
+}
+\end{lstlisting}
+Если обернуть \texttt{p} в умный указатель, память освободится автоматически в деструкторе, в том числе при размотке стека из-за исключения.
 \subsubsection{\texttt{unique\_ptr}, \texttt{shared\_ptr}, \texttt{weak\_ptr}: разница и примеры}
+\begin{definition}{std::unique\_ptr}{}
+Простейший умный указатель: единолично владеет ресурсом, \textbf{запрещает копирование} (доступно только перемещение) и удаляет ресурс в деструкторе.
+\end{definition}
+\begin{implementation}{Пример использования unique\_ptr}{}
+\begin{lstlisting}[language=C++]
+int main() {
+    std::unique_ptr<int> p = std::make_unique<int>(5);
+    std::cout << *p;           // работает как обычный указатель: *, ->
+    std::unique_ptr<int> p2 = std::move(p); // только перемещение, не копия
+    // std::unique_ptr<int> p3 = p2; // CE: конструктор копирования удалён
+}
+\end{lstlisting}
+\end{implementation}
+\textbf{Основные методы unique\_ptr:}
+\begin{itemize}
+  \item \texttt{*} и \texttt{->} --- ведёт себя как обычный указатель.
+  \item \texttt{get()} --- отдаёт "сырой" указатель, не отдавая владение.
+  \item \texttt{release()} --- отдаёт "сырой" указатель и делает unique\_ptr пустым (снимает с себя владение).
+  \item \texttt{swap()} --- меняет ресурс, которым владеет указатель, с другим unique\_ptr.
+  \item \texttt{operator bool()} --- проверка на \texttt{nullptr}.
+\end{itemize}
+\textbf{Важно:} для массивов нужна специализация \texttt{std::unique\_ptr<T[]>} (а не \texttt{std::unique\_ptr<T>}), иначе в деструкторе вызовется \texttt{delete} вместо \texttt{delete[]}:
+\begin{lstlisting}[language=C++]
+std::unique_ptr<int[]> p(new int[5]); // правильно
+\end{lstlisting}
+\begin{definition}{std::shared\_ptr}{}
+Умный указатель, позволяющий \textbf{нескольким} владельцам совместно владеть одним ресурсом. Внутри хранит (разделяемый между всеми копиями) счётчик ссылок; ресурс удаляется только тогда, когда счётчик дошёл до нуля, то есть последний владелец уничтожен.
+\end{definition}
+\begin{implementation}{Пример использования shared\_ptr}{}
+\begin{lstlisting}[language=C++]
+struct Test {
+    Test() { std::cout << "Test()\n"; }
+    ~Test() { std::cout << "~Test()\n"; }
+};
+
+void foo(std::shared_ptr<Test> ptr) {} // ptr копируется, счётчик +1, потом -1 на выходе
+void boo(const std::shared_ptr<Test>& ptr) {} // без копии, счётчик не меняется
+
+int main() {
+    auto t = std::make_shared<Test>(); // лучше создавать только через make_shared
+    foo(t);
+    boo(t);
+} // ~Test() вызовется один раз, когда t выйдет из области видимости
+\end{lstlisting}
+\end{implementation}
+\textbf{Замечание:} создавать \texttt{shared\_ptr} лучше через \texttt{std::make\_shared<T>(args...)}, а \texttt{unique\_ptr} --- через \texttt{std::make\_unique<T>(args...)}, а не через \texttt{shared\_ptr<T>(new T(...))} напрямую --- это и эффективнее (одна аллокация вместо двух для shared\_ptr), и безопаснее.
+\begin{definition}{std::weak\_ptr}{}
+"Слабая" ссылка на объект, которым владеет \texttt{shared\_ptr}: не участвует в подсчёте ссылок и не продлевает жизнь объекта, но позволяет проверить, жив ли объект ещё, и при необходимости временно получить полноценный \texttt{shared\_ptr} на него.
+\end{definition}
+\textbf{Проблема, которую решает weak\_ptr} --- циклические ссылки между shared\_ptr:
+\begin{lstlisting}[language=C++]
+struct S {
+    std::shared_ptr<S> ptr;
+};
+
+int main() {
+    auto s1 = std::make_shared<S>();
+    auto s2 = std::make_shared<S>();
+    s1->ptr = s2;
+    s2->ptr = s1; // s1 и s2 теперь ссылаются друг на друга -- утечка, счётчики никогда не дойдут до 0
+}
+\end{lstlisting}
+Решение --- одну из ссылок (например, на "родителя" в дереве, или на предыдущий элемент в списке) хранить через \texttt{weak\_ptr}.
+\textbf{Методы weak\_ptr:}
+\begin{itemize}
+  \item \texttt{expired()} --- проверяет, жив ли ещё объект (то есть существуют ли ещё shared\_ptr-владельцы).
+  \item \texttt{lock()} --- если объект жив, возвращает полноценный \texttt{shared\_ptr} на него (временно увеличивая счётчик ссылок); если объект уже уничтожен --- возвращает пустой \texttt{shared\_ptr}.
+\end{itemize}
+\textbf{Важно:} \texttt{weak\_ptr} нельзя разыменовать напрямую (\texttt{*}/\texttt{->} у него нет) --- только через \texttt{lock()}.
 
 \subsection{Ключевое слово \texttt{auto}} \label{auto}
 \subsubsection{Использование для объявления переменных: преимущества и недостатки}
+\begin{definition}{auto}{}
+\texttt{auto} позволяет не писать тип переменной явно --- компилятор выводит его сам из инициализирующего выражения.
+\end{definition}
+\textbf{Преимущества:}
+\begin{itemize}
+  \item Короче и опрятнее, особенно для длинных типов (итераторы контейнеров и т.п.):
+\begin{lstlisting}[language=C++]
+std::map<std::string, int> m;
+for (std::map<std::string, int>::iterator it = m.begin(); it != m.end(); ++it) { /* ... */ }
+// VS
+for (auto it = m.begin(); it != m.end(); ++it) { /* ... */ }
+\end{lstlisting}
+  \item Не даёт случайно ошибиться в типе (и тем самым устроить лишнее копирование). Например, элементы \texttt{std::map} на самом деле имеют тип \texttt{std::pair<const std::string, int>}, а не \texttt{std::pair<std::string, int>} --- при ручном написании типа легко ошибиться и получить лишнюю копию:
+\begin{lstlisting}[language=C++]
+for (const std::pair<std::string, int>& item : m) { /* item тут будет КОПИРОВАТЬСЯ! */ }
+for (const auto& item : m) { /* а тут -- нет */ }
+\end{lstlisting}
+  \item Если тип в коде поменяется (например, тип контейнера), код с \texttt{auto} часто не придётся переписывать.
+\end{itemize}
+\textbf{Недостаток:} читая код, не всегда сразу видно, какой именно тип у переменной (особенно если инициализирующее выражение сложное) --- иногда это снижает читаемость.
 \subsubsection{Правила вывода типа для \texttt{auto}}
+\begin{definition}{Правило вывода}{}
+Вывод типа для \texttt{auto} работает по тем же правилам, что и вывод шаблонного типа (как если бы переменная была параметром шаблонной функции \texttt{f(T value)}).
+\end{definition}
+\begin{lstlisting}[language=C++]
+int x;
+auto y = x; // y -- int, как при f(T value) от int
+\end{lstlisting}
+Как и при выводе шаблонного типа \texttt{T} по значению, \texttt{auto} (без \texttt{\&}) \textbf{отбрасывает ссылку и верхнеуровневый const} у инициализирующего выражения:
+\begin{lstlisting}[language=C++]
+int& foo(int& x) { return x; }
+
+int main() {
+    int x = 10;
+    auto y = foo(x); // y -- int (ссылка отброшена), копия
+    ++y; // меняет только y, не x
+}
+\end{lstlisting}
 \subsubsection{Особенности \texttt{auto\&}, \texttt{const auto\&}}
+На \texttt{auto} можно навешивать \texttt{\&} и \texttt{const} так же, как на шаблонный параметр:
+\begin{lstlisting}[language=C++]
+std::map<std::string, int> m;
+for (const auto& item : m) { /* item -- ссылка, без копирования */ }
+\end{lstlisting}
+\texttt{auto\&\&} ведёт себя как \term{универсальная ссылка} (forwarding reference, подробнее --- в секции "на хор"): к lvalue выражению она привяжется как \texttt{T\&}, к rvalue --- как \texttt{T\&\&}:
+\begin{lstlisting}[language=C++]
+int& foo(int& x) { return x; }
+
+int main() {
+    int x = 10;
+    auto&& y = foo(x); // foo возвращает lvalue (int&), значит y -- тоже int&
+    ++y; // меняет x!
+}
+\end{lstlisting}
 \subsubsection{Возвращаемый тип функций: trailing return type}
+\texttt{auto} можно использовать и как возвращаемый тип функции --- компилятор выведет его из \texttt{return}-выражений:
+\begin{lstlisting}[language=C++]
+auto f(int& x) {
+    return x; // выведенный тип -- int
+}
+
+int main() {
+    int v = 1;
+    auto x = f(v);   // OK, x -- int
+    // auto& y = f(v); // CE: f возвращает rvalue (временный int), к нему нельзя привязать auto&
+    auto&& z = f(v); // OK, z -- int&&
+}
+\end{lstlisting}
+\textbf{Важно:} если в функции с \texttt{auto}-возвращаемым типом несколько \texttt{return}, выведенные типы должны совпадать, иначе CE (компилятор не может выбрать один тип):
+\begin{lstlisting}[language=C++]
+auto f(int x) {
+    if (x > 0) return x;   // int
+    return 0u;              // unsigned int -- CE: типы не совпадают
+}
+\end{lstlisting}
+Иногда удобнее (или эстетичнее) указать возвращаемый тип явно \textbf{после} списка аргументов --- это и называется \term{trailing return type}:
+\begin{lstlisting}[language=C++]
+auto f(int x) -> int {
+    return x;
+}
+\end{lstlisting}
+Бывают случаи, когда trailing return type строго необходим (например, когда тип возврата зависит от параметров шаблона и выражается через \texttt{decltype} от ещё не объявленных в обычном порядке параметров) --- это подробно разбирается вместе с \texttt{decltype} в секции "на отл".
 \subsubsection{\texttt{auto} в параметрах функций}
+Начиная с C++20, \texttt{auto} можно использовать прямо в параметрах обычной (не шаблонной по синтаксису) функции:
+\begin{lstlisting}[language=C++]
+void f(auto&& x) {
+    // ...
+}
+\end{lstlisting}
+Это полностью эквивалентно записи через шаблонный параметр:
+\begin{lstlisting}[language=C++]
+template <typename T>
+void f(T&& x) {
+    // ...
+}
+\end{lstlisting}
+То есть \texttt{f} на самом деле остаётся шаблонной функцией, просто без явного \texttt{template <typename T>}. Аналогично можно написать и вариант с переменным числом аргументов:
+\begin{lstlisting}[language=C++]
+void f(auto... x) { /* эквивалент variadic templates */ }
+\end{lstlisting}

@@ -594,17 +594,385 @@ sizeof(arr); //  4 байта / 8  байт sizeof(int)
 \newpage
 \subsection{Вопрос 3}
 \subsubsection{Базовый синтаксис функций}
+\begin{definition}{Функция}{}
+\textbf{Функция} --- блок кода, который выполняет какую-то операцию. Характеризуется четырьмя вещами: типом возвращаемого значения, названием, типами принимаемых аргументов (и их названиями) и телом.
+\end{definition}
+Объявление функции выглядит так:
+\begin{lstlisting}[language=C++]
+return_type function_name(ArgType1 arg1, ArgType2 arg2);
+
+// например
+int foo(int a, double b);
+\end{lstlisting}
+А определение --- это объявление плюс тело:
+\begin{lstlisting}[language=C++]
+return_type function_name(ArgType1 arg1, ArgType2 arg2) {
+    your_code;
+}
+\end{lstlisting}
+\textbf{Про return:} если возвращаемый тип не \texttt{void}, внутри функции обязан быть \texttt{return} с значением. Если \texttt{void}, то \texttt{return} тоже можно писать, но без аргумента --- удобно для досрочного выхода:
+\begin{lstlisting}[language=C++]
+void DevideAndPrint(int a, int b) {
+    if (b == 0) {
+        std::cout << "Devision by zero!";
+        return;
+    }
+    std::cout << a / b;
+}
+\end{lstlisting}
+\textbf{Важно:} аргументы в C++ передаются по умолчанию \textbf{по значению}, то есть копируются. Поэтому, например, классический \texttt{swap(a, b)} через \texttt{int}-аргументы работать не будет --- внутри функции мы поменяем местами копии, а снаружи ничего не изменится. Чтобы это починить, нужны указатели или ссылки (см. Вопрос 4).
 \subsubsection{Аргументы по умолчанию}
+\begin{definition}{Аргумент по умолчанию}{}
+Значение, которое подставляется в параметр функции, если при вызове он не был передан явно.
+\end{definition}
+\begin{implementation}{Пример}{}
+\begin{lstlisting}[language=C++]
+int PlusWithLogging(int a, int b, bool logging = false) {
+    if (logging) {
+        std::cout << "Plus";
+    }
+    return a + b;
+}
+
+int main() {
+    PlusWithLogging(1, 2);        // logging = false
+    PlusWithLogging(1, 2, false);
+    PlusWithLogging(1, 2, true);
+}
+\end{lstlisting}
+\end{implementation}
+\textbf{Правила:}
+\begin{itemize}
+  \item Сначала идут обычные аргументы (без значения по умолчанию), а уже потом --- все со значением по умолчанию. Перемешивать нельзя.
+  \item Значение по умолчанию можно указать только один раз во всей программе (оно считается частью определения), иначе CE:
+\begin{lstlisting}[language=C++]
+void foo(int b = 10);
+void foo(int b = 10) { return; } // CE: redefinition of default argument
+\end{lstlisting}
+\end{itemize}
 \subsubsection{Перегрузка функций: простые примеры}
+\begin{definition}{Перегрузка функций}{}
+\textbf{Перегрузка} --- возможность иметь несколько функций с одинаковым именем, но разными списками аргументов. Компилятор сам выбирает нужную версию по типам переданных аргументов.
+\end{definition}
+\begin{implementation}{Пример}{}
+\begin{lstlisting}[language=C++]
+void foo(double) { std::cout << 1; }
+void foo(int) { std::cout << 2; }
+
+int main() {
+    foo(10);  // выведет 2
+    foo(5.0); // выведет 1
+}
+\end{lstlisting}
+\end{implementation}
+\textbf{Важно:} перегружать можно только по принимаемым аргументам. Две функции, отличающиеся лишь типом возвращаемого значения --- это не перегрузка, а CE:
+\begin{lstlisting}[language=C++]
+int foo(int a);
+double foo(int a); // CE: foo cannot be overloaded
+\end{lstlisting}
+При этом возвращаемый тип у перегрузок может отличаться, если списки аргументов всё-таки разные:
+\begin{lstlisting}[language=C++]
+double plus(double, double);
+double plus(int, int); // OK, аргументы разные
+\end{lstlisting}
 \subsubsection{Правила выбора перегрузки (базовое понимание)}
+Полные правила выбора перегрузки можно посмотреть на \href{https://en.cppreference.com/w/cpp/language/overload_resolution}{cppreference}. Кратко (на базовом уровне):
+\begin{enumerate}
+  \item Если есть точное совпадение типов --- побеждает оно.
+  \item Если точного совпадения нет, смотрят на \term{promotion} (например, \texttt{int} $\to$ \texttt{long}, \texttt{float} $\to$ \texttt{double}).
+  \item Если и promotion нет, идут стандартные \term{conversion} (например, \texttt{int} $\to$ \texttt{double}).
+\end{enumerate}
+Если по этим правилам нельзя однозначно выбрать одну перегрузку (несколько одинаково подходят) --- получаем CE (\texttt{ambiguous call}):
+\begin{lstlisting}[language=C++]
+void foo(float) {}
+void foo(int) {}
+
+int main() {
+    foo(5.0); // CE: call to foo is ambiguous
+}
+\end{lstlisting}
+\textbf{Замечание:} \texttt{double -> float} и \texttt{double -> int} --- оба стандартных преобразования, и с точки зрения компилятора они равнозначны, поэтому выбрать одну версию нельзя.
 \newpage
 \subsection{Вопрос 4}
 \subsubsection{Ссылки}
+\begin{definition}{Ссылка}{}
+\textbf{Ссылка} --- это, по сути, второе имя (псевдоним) уже существующей переменной. Объявляется добавлением \texttt{\&} к типу: \texttt{T\& name = obj;}. Концепции ссылок в языке C нет, это фича C++.
+\end{definition}
+\begin{implementation}{Пример}{}
+\begin{lstlisting}[language=C++]
+int a = 1;
+int& b = a; // b -- это теперь тоже имя переменной a
+
+b = 5;
+std::cout << a; // 5, потому что a и b -- одна и та же переменная
+\end{lstlisting}
+\end{implementation}
+\textbf{Зачем нужны:}
+\begin{itemize}
+  \item Создавать псевдонимы для переменных.
+  \item Легковесно передавать аргументы в функции без копирования и без возни с разыменованием указателей. Если бы мы передавали \texttt{std::vector<int>} по значению, при каждом вызове он бы целиком копировался.
+\end{itemize}
+\textbf{Важные свойства ссылок:}
+\begin{itemize}
+  \item Ссылку \textbf{нельзя} объявить без инициализации --- ей сразу нужно к чему-то привязаться.
+  \item Ссылку можно проинициализировать только lvalue (то есть нельзя написать \texttt{int\& a = 10;}).
+  \item Ссылка привязывается к объекту \textbf{один раз и навсегда} --- перепривязать её к другому объекту нельзя (\texttt{ref = other;} просто присвоит \texttt{other} в объект, на который указывает \texttt{ref}, а не перепривяжет ссылку).
+  \item На текущем уровне знаний ссылку нельзя никак отличить от переменной, на которую она ссылается (даже адрес совпадает).
+  \item Нельзя перегружать функции по признаку "ссылка/не ссылка" на один и тот же тип:
+\begin{lstlisting}[language=C++]
+void f(int& c) {}
+void f(int c) {}
+int main() {
+    int a;
+    f(a); // CE: ambiguous, перегрузки неразличимы
+}
+\end{lstlisting}
+  \item Нельзя: указатель на ссылку (\texttt{int\&* a;} --- CE), массив ссылок, ссылку на ссылку.
+\end{itemize}
+\textbf{Возврат ссылок из функций:} можно вернуть ссылку на объект, который продолжит жить после выхода из функции (например, на переданный по ссылке аргумент):
+\begin{lstlisting}[language=C++]
+int& f(int& x) {
+    ++x;
+    return x;
+}
+int main() {
+    int a = 10;
+    f(a) = 20; // OK, f(a) -- это lvalue (ссылка на a)
+}
+\end{lstlisting}
+А вот вернуть ссылку на локальную переменную --- UB (висячая ссылка, dangling reference), потому что объект уничтожается при выходе из функции:
+\begin{lstlisting}[language=C++]
+int& f() {
+    int x = 10;
+    return x; // UB
+}
+int main() {
+    int& a = f();
+    a = 10; // UB: обращаемся к уже разрушенному объекту
+}
+\end{lstlisting}
+\textbf{Замечание:} уничтожение самой ссылки (выход из её области видимости) не уничтожает объект, на который она ссылается:
+\begin{lstlisting}[language=C++]
+int main() {
+    int a = 10;
+    {
+        int& b = a;
+    } // b умерла, a жива
+    a = 5; // OK
+}
+\end{lstlisting}
 \subsubsection{Константы}
-\subsubsection{Навешиваниие констант на указатели и ссылки}
+\begin{definition}{const}{}
+\textbf{const T} --- это тип, который ведёт себя почти так же как \texttt{T}, но поддерживает меньше операций: объект, объявленный как \texttt{const}, нельзя изменять.
+\end{definition}
+\begin{implementation}{Пример}{}
+\begin{lstlisting}[language=C++]
+int main() {
+    const int a = 5;
+    // a = 6; -- CE
+}
+\end{lstlisting}
+\end{implementation}
+\textbf{4 способа передать аргумент в функцию:}
+\begin{itemize}
+  \item По значению (будет копия).
+  \item По константному значению (бессмысленно для базового использования, так почти не пишут).
+  \item По ссылке (можем менять исходный объект, копии нет).
+  \item По константной ссылке (без копии, но изменить объект через эту ссылку нельзя).
+\end{itemize}
+\textbf{Замечание:} можно перегружать функции по константной/неконстантной ссылке.
+\textbf{Продление жизни:} константной ссылке можно присвоить временный объект --- время жизни этого временного объекта продлевается до времени жизни ссылки:
+\begin{lstlisting}[language=C++]
+int main() {
+    const int& a = 5; // временный объект 5 проживёт столько же, сколько a
+}
+\end{lstlisting}
+\subsubsection{Навешивание констант на указатели и ссылки}
+Константу можно "навесить" на уже знакомые нам указатели несколькими способами.
+\textbf{Указатель на константу} (менять можно сам указатель, но не то что под ним):
+\begin{lstlisting}[language=C++]
+int a;
+const int* ptr = &a;
+\end{lstlisting}
+\textbf{Константный указатель} (менять нельзя сам указатель, но можно то, что под ним):
+\begin{lstlisting}[language=C++]
+int a;
+int* const ptr = &a;
+\end{lstlisting}
+\textbf{Константный указатель на константу} (нельзя менять ни то, ни другое):
+\begin{lstlisting}[language=C++]
+int a;
+const int* const ptr = &a;
+\end{lstlisting}
+\begin{implementation}{Все случаи сразу}{}
+\begin{lstlisting}[language=C++]
+int main() {
+    int a = 5;
+
+    const int* p = &a;
+    ++p;   // OK, сам указатель не const
+    ++*p;  // CE, то, на что указывает p, -- const
+
+    int* const pp = &a;
+    ++pp;  // CE, указатель pp -- const
+    ++*pp; // OK
+
+    const int* const ppp = pp; // OK: cast от int* к const int* разрешен
+    ++ppp;  // CE
+    ++*ppp; // CE
+
+    int* const q = ppp; // CE, запрещённый каст (теряем константность)
+    const int* qq = ppp; // OK, просто копия
+}
+\end{lstlisting}
+\end{implementation}
+Аналогично можно навесить константу на ссылку --- константная ссылка даёт доступ только на чтение, и присвоить её обычной (неконстантной) ссылке нельзя:
+\begin{lstlisting}[language=C++]
+int main() {
+    int a = 5;
+    const int& ref = a;
+    int& b = ref; // CE: теряем константность
+}
+\end{lstlisting}
+\newpage
 \subsection{Вопрос 5}
 \subsubsection{Абстракция, инкапсуляция, наследование, полиморфизм}
+\begin{definition}{Абстракция}{}
+\textbf{Абстракция} --- выделение значимой информации об объекте и исключение из рассмотрения незначимой. В ООП обычно говорят про абстракцию данных: набор наиболее важных характеристик объекта, доступных остальной программе.
+\end{definition}
+\begin{definition}{Инкапсуляция}{}
+\textbf{Инкапсуляция} --- свойство системы, позволяющее объединить данные и методы, которые с этими данными работают, в одной сущности (классе).
+\end{definition}
+\textbf{Замечание:} в C++ под инкапсуляцией часто понимают ещё и сокрытие данных (через \texttt{private}), но вообще говоря это необязательное условие самой инкапсуляции.
+\begin{definition}{Наследование}{}
+\textbf{Наследование} --- свойство системы, позволяющее описать новый класс на основе уже существующего, частично или полностью заимствуя его функциональность.
+\end{definition}
+\begin{definition}{Полиморфизм}{}
+\textbf{Полиморфизм} (точнее, полиморфизм подтипов) --- свойство системы, позволяющее использовать объекты с одинаковым интерфейсом, не зная их точного типа и внутреннего устройства.
+\end{definition}
 \subsubsection{Классы, объекты, члены классов, поля, методы}
+\begin{definition}{Класс}{}
+\textbf{Класс} --- кастомный (придуманный программистом) тип данных, состоящий из набора \term{полей} и \term{методов} для взаимодействия с ними.
+\end{definition}
+\textbf{Замечание:} до некоторого момента \texttt{class} и \texttt{struct} в C++ --- абсолютно одно и то же (разница только в модификаторе доступа по умолчанию, см. Вопрос 1 секции "на уд").
+\begin{lstlisting}[language=C++]
+class MyAwesomeClass {
+    // ...
+};
+
+int main() {
+    MyAwesomeClass c; // c -- объект (он же экземпляр) класса MyAwesomeClass
+    sizeof(c); // 1, у пустого класса есть минимальный ненулевой размер
+}
+\end{lstlisting}
+\textbf{Поля} --- это данные, которые хранит в себе объект. \textbf{Методы} --- это функции, которые можно совершать над объектом данного класса (внутри методов нам доступны поля объекта, для которого метод вызван).
+\begin{implementation}{Структура с полями и методом}{}
+\begin{lstlisting}[language=C++]
+struct Student {
+    std::string name;
+    size_t grade;
+
+    void Print() {
+        std::cout << name << " " << grade << std::endl;
+    }
+};
+\end{lstlisting}
+\end{implementation}
+\textbf{Важно:} если не задать полям значения по умолчанию, то при объявлении объекта без явной инициализации в полях окажется мусор (для встроенных типов) либо значение по умолчанию для типа поля (например, пустая строка для \texttt{std::string}):
+\begin{lstlisting}[language=C++]
+struct Student {
+    std::string name = "Test"; // теперь по умолчанию не мусор
+    size_t grade = 10;
+};
+\end{lstlisting}
+Методы можно объявлять внутри класса, а определять --- снаружи, через оператор \texttt{::}:
+\begin{lstlisting}[language=C++]
+struct Student {
+    std::string name;
+    size_t grade;
+
+    void Print(); // объявили
+};
+
+void Student::Print() { // определили
+    std::cout << name << " " << grade << std::endl;
+}
+\end{lstlisting}
 \subsubsection{Операторы . , -> , ключевое слово this}
+\begin{itemize}
+  \item Оператор \texttt{.} --- обращение к полям и методам объекта.
+  \item Оператор \texttt{->} --- обращение к полям и методам через указатель на объект (синтаксический сахар для \texttt{(*ptr).field}).
+\end{itemize}
+\begin{lstlisting}[language=C++]
+int main() {
+    Student student;
+    student.Print();   // через объект
+
+    Student* ptr = &student;
+    ptr->Print();       // через указатель
+}
+\end{lstlisting}
+\begin{definition}{this}{}
+Внутри любого нестатического метода класса неявно определён указатель \texttt{this} --- указатель на тот объект, для которого метод был вызван.
+\end{definition}
+\begin{implementation}{Зачем нужен this}{}
+\begin{lstlisting}[language=C++]
+struct Student {
+    std::string name = "Test";
+
+    void SetName(std::string name) {
+        this->name = name; // отличаем поле от параметра с тем же именем
+    }
+};
+\end{lstlisting}
+\end{implementation}
+\newpage
 \subsection{Вопрос 6}
 \subsubsection{Перечисления (enum): примеры и как с ними работать}
+\begin{definition}{enum}{}
+\textbf{Перечисление (enum)} --- способ объявить свой тип как набор именованных констант.
+\end{definition}
+\begin{implementation}{Обычный enum}{}
+\begin{lstlisting}[language=C++]
+enum Color {
+    RED,
+    GREEN,
+    BLUE,
+    YELLOW
+};
+
+Color c = BLUE; // так писать не стоит, см. ниже
+\end{lstlisting}
+\end{implementation}
+\textbf{Проблема:} обычный \texttt{enum} вносит все свои константы (\texttt{RED}, \texttt{GREEN}, ...) в окружающую область видимости, что легко приводит к конфликту имён. Поэтому в C++11 ввели \texttt{enum class}:
+\begin{implementation}{enum class}{}
+\begin{lstlisting}[language=C++]
+enum class Color {
+    RED,
+    GREEN,
+    BLUE
+};
+
+Color c = Color::BLUE; // обращение через имя enum
+\end{lstlisting}
+\end{implementation}
+По умолчанию константы нумеруются с 0 по порядку (\texttt{RED} = 0, \texttt{GREEN} = 1, \texttt{BLUE} = 2). Можно явно задавать числовые значения, а необозначенные продолжат счёт от последнего заданного:
+\begin{lstlisting}[language=C++]
+enum class Foo {
+    a,         // 0
+    b,         // 1
+    c = 10,    // 10
+    d,         // 11
+    e = 1,     // 1 (можно повторять значения)
+    f,         // 2
+    g = f + c, // 12
+};
+\end{lstlisting}
+Можно явно указать, константами какого целочисленного типа являются значения \texttt{enum} (по умолчанию это обычно \texttt{int}):
+\begin{lstlisting}[language=C++]
+enum class Color : int8_t {
+    RED,
+    GREEN,
+    BLUE
+};
+\end{lstlisting}

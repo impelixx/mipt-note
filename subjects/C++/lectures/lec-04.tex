@@ -4,63 +4,1141 @@
 
 \subsection{Шаблоны для компилятора}
 \subsubsection{Инстанцирование шаблонов}
+Шаблон сам по себе --- это не код, а "рецепт" для генерации кода. Реальный код для конкретного типа появляется только тогда, когда шаблон где-то реально используется --- этот процесс называется \term{инстанцированием}.
+\begin{definition}{Инстанцирование шаблона}{}
+Подстановка конкретных типов вместо шаблонных параметров и генерация настоящего, "обычного" кода функции/класса для этих конкретных типов. Происходит на этапе компиляции (формально --- на этапе препроцессинга/ранней компиляции, до генерации машинного кода).
+\end{definition}
+\begin{lstlisting}[language=C++]
+template <typename T>
+T GetMax(const T& a, const T& b) {
+    return a > b ? a : b;
+}
+
+int main() {
+    GetMax(1, 2);     // инстанцируется версия для int
+    GetMax(1.0, 2.0); // инстанцируется отдельная, своя версия для double
+}
+\end{lstlisting}
+\textbf{Важные следствия:}
+\begin{itemize}
+  \item Если шаблонную функцию ни разу не вызвать (и шаблонный класс не использовать), её код вообще не попадёт в итоговую программу --- компилятор просто нечего инстанцировать.
+  \item Если вызвать шаблон от нескольких разных типов, для каждого типа сгенерируется \textbf{своя, независимая} версия кода (отсюда, например, и то, что полная специализация класса может быть совершенно непохожа на основной шаблон, см. секцию "на хор").
+  \item Именно поэтому реализацию шаблонов почти всегда пишут прямо в заголовочном файле (\texttt{.h}), а не в отдельном \texttt{.cpp}: на момент компиляции кода, который вызывает шаблон, компилятору нужно видеть его полное определение, чтобы было что инстанцировать.
+\end{itemize}
 \subsubsection{Правила вывода шаблонных типов}
+Когда мы пишем \texttt{GetMax(1, 2)} без явного указания \texttt{<int>}, компилятор сам выводит, чему равен \texttt{T}. Чтобы посмотреть, что именно он вывел, есть забавный трюк --- объявить шаблон с \texttt{= delete}, тогда компилятор честно напишет в ошибке, какой тип попытался подставить:
+\begin{lstlisting}[language=C++]
+template <typename T>
+void f(T x) = delete;
+
+f(1); // CE, в тексте ошибки компилятор укажет T = int
+\end{lstlisting}
+\textbf{Случай 1: параметр по значению (\texttt{T x})} --- ссылки и верхнеуровневый \texttt{const} \textbf{всегда} отбрасываются, как и с \texttt{auto} (см. секцию "на уд"):
+\begin{lstlisting}[language=C++]
+template <typename T> void f(T x) = delete;
+
+int x = 0;
+int& y = x;
+const int& z = y;
+const int c = 0;
+
+f(x); // T = int
+f(y); // T = int (ссылка отброшена)
+f(z); // T = int (и ссылка, и const отброшены)
+f(c); // T = int
+\end{lstlisting}
+\textbf{Случай 2: параметр по ссылке (\texttt{T\& x})} --- \texttt{const} с аргумента переносится прямо на \texttt{T}:
+\begin{lstlisting}[language=C++]
+template <typename T> void f(T& x) = delete;
+
+f(x); // T = int
+f(y); // T = int (T& -- это int&, значит T = int)
+f(z); // T = const int! (T& -- это const int&, значит T = const int)
+f(c); // T = const int
+\end{lstlisting}
+\textbf{Случай 3: параметр по константной ссылке (\texttt{const T\& x})} --- \texttt{const} уже "встроен" в саму сигнатуру параметра, поэтому \texttt{T} получается без него, для всех вариантов:
+\begin{lstlisting}[language=C++]
+template <typename T> void f(const T& x) = delete;
+
+f(x); f(y); f(z); f(c); // во всех случаях T = int
+\end{lstlisting}
+\textbf{Важный факт про "ссылку на ссылку":} в языке такого не существует в принципе, поэтому если шаблонный параметр явно указать как ссылочный тип, при подстановке сработает сжатие ссылок (см. секцию "на хор", универсальные ссылки):
+\begin{lstlisting}[language=C++]
+template <typename T> void f(T& x) = delete;
+
+int x = 1;
+int& y = x;
+f<int&>(y); // T = int&, T& -- это "int& &", схлопнется в просто int&
+\end{lstlisting}
 \subsubsection{Вычисления на шаблонах: Фибоначчи, проверка простоты}
+\begin{definition}{Шаблонное метапрограммирование}{}
+Использование шаблонов для того, чтобы заставить компилятор что-то посчитать на этапе компиляции, ещё до того, как программа реально запустится. Исторически появилось до \texttt{constexpr} --- сейчас для большинства таких задач лучше использовать именно \texttt{constexpr} (см. конец этой секции), но понимать "классический" шаблонный способ всё равно полезно.
+\end{definition}
+\begin{implementation}{Числа Фибоначчи на шаблонах}{}
+\begin{lstlisting}[language=C++]
+template <int N>
+struct Fib {
+    static const int value = Fib<N - 1>::value + Fib<N - 2>::value; // рекурсивный случай
+};
+
+template <> struct Fib<1> { static const int value = 1; }; // базовый случай 1
+template <> struct Fib<0> { static const int value = 0; }; // базовый случай 2
+
+static_assert(Fib<10>::value == 55);
+\end{lstlisting}
+\end{implementation}
+\textbf{Логика} ровно такая же, как у обычной рекурсивной функции: есть базовые случаи (полные специализации для \texttt{N=0} и \texttt{N=1}) и общий рекурсивный случай, использующий результаты для меньших \texttt{N}. Просто вместо вызова функции в рантайме компилятор "вызывает" другую специализацию шаблона на этапе компиляции.
+\begin{implementation}{Проверка простоты числа за корень}{}
+\begin{lstlisting}[language=C++]
+template <int N, int K>
+struct Helper {
+    static const bool value = (N % K != 0) && Helper<N, K - 1>::value;
+};
+
+template <int N>
+struct Helper<N, 1> { // базовый случай: дошли до делителя 1, дальше делить не на что
+    static const bool value = true;
+};
+
+template <int N>
+struct IsPrime {
+    static const bool value = Helper<N, N - 1>::value; // перебираем делители от N-1 до 2
+};
+\end{lstlisting}
+\end{implementation}
+\textbf{Замечание про глубину рекурсии:} если рекурсия шаблонной подстановки становится слишком большой (например, \texttt{IsPrime<10000000>}), компилятор упадёт с ошибкой "recursive template instantiation exceeded maximum depth". Глубину можно увеличить флагом компилятора \texttt{-ftemplate-depth=N}, но бесконечно большой она быть не может --- компилятору тоже не хватит оперативной памяти на такое количество инстанцированных шаблонов.
 \subsubsection{Fold-expressions: 4 вида, синтаксис, раскрытие}
+\begin{definition}{Fold-expression (выражение свёртки)}{}
+Появившаяся в C++17 краткая запись для применения бинарного оператора ко \textbf{всем} элементам пакета параметров сразу, без ручной рекурсии (как при обычной обработке variadic templates, см. секцию "на хор").
+\end{definition}
+Есть четыре формы свёртки, в зависимости от того, с какой стороны стоит пакет и с какой стороны "начальное" значение:
+\begin{center}
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Форма} & \textbf{Синтаксис} & \textbf{Раскрытие для (e1, e2, e3)} \\
+\hline
+Unary right fold & \texttt{(pack op ...)} & \texttt{e1 op (e2 op e3)} \\
+Unary left fold & \texttt{(... op pack)} & \texttt{(e1 op e2) op e3} \\
+Binary right fold & \texttt{(pack op ... op init)} & \texttt{e1 op (e2 op (e3 op init))} \\
+Binary left fold & \texttt{(init op ... op pack)} & \texttt{((init op e1) op e2) op e3} \\
+\hline
+\end{tabular}
+\end{center}
+\begin{implementation}{Простая сумма пакета}{}
+\begin{lstlisting}[language=C++]
+template <typename... Args>
+auto Sum(Args... args) {
+    return (args + ...); // unary right fold: a1 + (a2 + (a3 + ...))
+}
+
+int main() {
+    std::cout << Sum(1, 2, 3, 4); // 10
+}
+\end{lstlisting}
+\end{implementation}
+\textbf{Важное практическое применение} --- свёртка с оператором запятая, чтобы выполнить какое-то действие для \textbf{каждого} элемента пакета по очереди (а не вычислить одно общее значение):
+\begin{lstlisting}[language=C++]
+template <typename... Args>
+void PrintAll(const Args&... args) {
+    ((std::cout << args << " "), ...); // выполнит "вывести и пробел" для каждого аргумента
+}
+
+int main() {
+    PrintAll(1, 2.5, "test"); // 1 2.5 test
+}
+\end{lstlisting}
+\textbf{Замечание про пустой пакет:} свёртка от пустого пакета валидна только для операторов \texttt{\&\&} (даёт \texttt{true}), \texttt{||} (даёт \texttt{false}) и оператора запятая (даёт ничего/no-op) --- для остальных операторов (как \texttt{+}) нужна форма с явным начальным значением (binary fold).
 \subsubsection{Пример: \texttt{print} от переменного числа аргументов}
+Сравним с рекурсивной реализацией \texttt{print} из секции "на хор" --- через fold-expression она пишется в одну строку, без отдельной функции для базового случая:
+\begin{lstlisting}[language=C++]
+template <typename... Args>
+void print(const Args&... args) {
+    ((std::cout << args << '\n'), ...);
+}
+
+int main() {
+    print(1, 2, "test", 2.0); // выведет каждый аргумент с новой строки, без ручной рекурсии
+}
+\end{lstlisting}
 \subsubsection{Метафункции с fold: все типы одинаковы и т.п.}
+Fold-expressions удобно применять и для метафункций (не только во время выполнения, но и на этапе компиляции, поскольку выражение целиком constexpr):
+\begin{implementation}{Проверка, что все типы пакета одинаковые}{}
+\begin{lstlisting}[language=C++]
+template <typename First, typename... Rest>
+struct AllSame {
+    static const bool value = (std::is_same_v<First, Rest> && ...); // unary right fold по &&
+};
+
+static_assert(AllSame<int, int, int>::value);
+static_assert(!AllSame<int, double, int>::value);
+\end{lstlisting}
+\end{implementation}
+Это заметно компактнее рекурсивной реализации \texttt{is\_same\_many} из секции "на хор" --- весь перебор пакета компилятор делает сам через раскрытие свёртки, без явной структуры для базового случая.
 
 \subsection{Виртуальное наследование}
+\textbf{Напоминание проблемы} (см. секцию "на хор", проблема ромба): при обычном множественном наследовании, если класс наследуется от одного и того же предка дважды (по разным веткам), внутри оказываются \textbf{две независимые} копии этого предка, и обращение к его полям становится неоднозначным.
+\begin{definition}{Виртуальное наследование}{}
+Способ наследования (\texttt{class Mom: public virtual Granny}), при котором, сколько бы раз класс ни наследовался от \texttt{Granny} по разным путям, в итоговом объекте будет храниться только \textbf{одна, общая} её копия.
+\end{definition}
+\begin{implementation}{Решение проблемы ромба}{}
+\begin{lstlisting}[language=C++]
+struct Granny { int g; };
+struct Mom: public virtual Granny { int m; };
+struct Dad: public virtual Granny { int d; };
+struct Son: Mom, Dad { int s; };
+
+int main() {
+    Son son;
+    son.g; // теперь OK, не ambiguous -- Granny ровно одна
+}
+\end{lstlisting}
+\end{implementation}
 \subsubsection{Расположение объектов в памяти}
+Если бы виртуальное наследование просто "склеивало" две копии \texttt{Granny} в одну, не было бы понятно, по какому сдвигу от начала объекта эту единственную \texttt{Granny} искать --- из ветки \texttt{Mom} и из ветки \texttt{Dad} сдвиг был бы разный. На практике в начале объекта \texttt{Mom}/\texttt{Dad} вместо самой \texttt{Granny} кладётся специальный указатель:
+\begin{lstlisting}
+Son: [ptr_to_Mom_vtable][m][ptr_to_Dad_vtable][d][s][Granny: g]
+\end{lstlisting}
+То есть реальный \texttt{Granny} лежит в самом конце (после всех "обычных" частей), а \texttt{Mom} и \texttt{Dad} вместо прямого хранения \texttt{Granny} хранят указатель на специальную служебную таблицу, через которую можно вычислить сдвиг до настоящей, единственной \texttt{Granny}.
 \subsubsection{Устройство виртуального наследования (точка зрения компилятора)}
+\begin{definition}{vtable при виртуальном наследовании}{}
+Заводится специальная таблица в статической памяти, в которой для каждого класса-наследника записан сдвиг (offset) от начала его подобъекта до общего виртуального предка. Указатель в начале подобъекта \texttt{Mom}/\texttt{Dad} указывает именно на эту таблицу.
+\end{definition}
+\textbf{Что происходит при обращении \texttt{son.g}:} компилятор (точнее, сгенерированный им код) идёт по указателю на таблицу, читает оттуда сдвиг до \texttt{Granny}, и по этому сдвигу от начала подобъекта \texttt{Mom} (или \texttt{Dad}, в зависимости от того, через какую ветку идёт обращение) находит реальные данные \texttt{Granny}. Это и обеспечивает то, что неважно, через \texttt{Mom} или через \texttt{Dad} мы попадём в \texttt{Granny} --- мы попадём в одну и ту же память.
+\textbf{Цена:} виртуальное наследование делает объект тяжелее (нужны дополнительные указатели на таблицы смещений) и чуть медленнее (обращение к виртуальному базовому классу требует лишнего разыменования через таблицу), поэтому используется только когда реально нужно решить проблему ромба, а не "про запас".
 \subsubsection{Устройство виртуальных функций}
+\begin{definition}{vtable (таблица виртуальных функций)}{}
+Статическая (общая для всех объектов одного класса) таблица, в которой для каждой виртуальной функции класса хранится указатель на её актуальную реализацию. Каждый объект полиморфного типа хранит \textbf{указатель} на эту таблицу --- обычно первым полем.
+\end{definition}
+\begin{implementation}{Базовый пример}{}
+\begin{lstlisting}[language=C++]
+struct Base {
+    virtual void f() {}
+    void h();  // не виртуальный метод -- в vtable не попадает
+    int x = 0;
+};
+\end{lstlisting}
+\end{implementation}
+\texttt{sizeof(Base)} здесь равен 16 байтам (на 64-битной системе), потому что внутри объекта хранится: указатель на vtable (8 байт) + \texttt{int x} (4 байта) + 4 байта выравнивания. Сама vtable для \texttt{Base} (она лежит в статической памяти, не внутри объекта) хранит указатель на \texttt{type\_info} (для RTTI/\texttt{typeid}, см. секцию "на хор") и адрес \texttt{Base::f}.
+\begin{implementation}{Добавим наследника}{}
+\begin{lstlisting}[language=C++]
+struct Derived: Base {
+    void f() override {}
+    virtual void g();
+    int y;
+};
+\end{lstlisting}
+\end{implementation}
+Объект \texttt{Derived} устроен так: \texttt{[указатель на vtable][x][y]} (тот же единственный указатель на vtable в начале, что унаследован от \texttt{Base}, просто теперь он указывает на \textbf{другую} таблицу). А vtable для \texttt{Derived} содержит: \texttt{[указатель на type\_info][\&Derived::f][\&Derived::g]} --- то есть переопределённую версию \texttt{f} и новую виртуальную функцию \texttt{g}.
+\textbf{Именно поэтому виртуальный вызов работает в рантайме:} вызов \texttt{obj.f()} компилируется не в прямой адрес функции, а в код "сходить по указателю на vtable объекта, взять оттуда нужную ячейку, вызвать функцию по этому адресу". Какая именно vtable окажется под указателем --- зависит от реального (динамического) типа объекта, а не от типа ссылки/указателя, через который мы обращаемся.
+\textbf{Пример с тремя уровнями наследования:}
+\begin{lstlisting}[language=C++]
+struct Granny { int g; }; // не полиморфный! нет виртуальных функций
+struct Mom: Granny { virtual void f() {} int m; };
+struct Son: Mom { void f() override {} int s; };
+// Son: [ptr_to_vtable][g][m][s]
+\end{lstlisting}
+\textbf{Важная тонкость:} поскольку \texttt{Granny} сама по себе не полиморфна (нет виртуальных функций), \texttt{dynamic\_cast} от неё не сработает, даже если "под ней" реально лежит \texttt{Son}:
+\begin{lstlisting}[language=C++]
+Son s;
+Granny& g = s;
+dynamic_cast<Son&>(g); // CE: source type 'Granny' is not polymorphic
+\end{lstlisting}
 \subsubsection{Случай с множественным наследованием}
+При множественном наследовании от \textbf{нескольких} полиморфных базовых классов объект уже не может обойтись одним-единственным указателем на vtable --- ведь у каждой "ветки" наследования свой набор виртуальных функций и свой сдвиг внутри общего объекта.
+\begin{lstlisting}[language=C++]
+struct Mom  { virtual void f(); int m; };
+struct Dad  { virtual void g(); int d; };
+struct Son: Mom, Dad { void f() override; void g() override; int s; };
+// Son: [ptr_to_Mom_vtable][m][ptr_to_Dad_vtable][d][s]
+\end{lstlisting}
+В объекте \texttt{Son} оказывается \textbf{два} указателя на vtable --- один для части \texttt{Mom}, другой для части \texttt{Dad}. Когда вызывается \texttt{Son::g} через указатель типа \texttt{Dad*}, компилятор использует vtable, "привязанную" именно к \texttt{Dad}-части объекта; внутри этой vtable, помимо самого адреса функции, для случаев вроде этого иногда нужна ещё и небольшая корректировка указателя \texttt{this} (так называемый \term{thunk}), чтобы из адреса \texttt{Dad}-подобъекта получить правильный адрес начала всего \texttt{Son} (или наоборот). Детальный механизм этих "thunk"-корректировок выходит за рамки базового курса --- для экзамена важно понимать главное: при множественном наследовании от нескольких полиморфных предков указателей на vtable становится несколько, по одному на каждую полиморфную ветку.
 
 \subsection{Аллокаторы: нюансы}
-\subsubsection{\texttt{propagate\_on\_container\_copy\_assignment}}
-\subsubsection{\texttt{propagate\_on\_container\_move\_assignment}}
+\textbf{Откуда вообще берутся все эти нюансы:} когда мы копируем контейнер (\texttt{v2 = v1;}), у которого есть кастомный аллокатор, не сразу понятно, что должно произойти с самим аллокатором: \texttt{v2} должен получить копию аллокатора \texttt{v1} (с теми же настройками, тем же пулом памяти), или просто завести "свежий" аллокатор того же типа? Однозначного правильного ответа нет --- поэтому стандарт даёт аллокатору набор специальных \texttt{using}-ов, которыми он сам объявляет своё поведение в таких ситуациях.
 \subsubsection{\texttt{select\_on\_container\_copy\_construction}}
+\begin{definition}{select\_on\_container\_copy\_construction}{}
+Метод, который контейнер обязан вызвать в своём конструкторе копирования, чтобы получить аллокатор для новой копии.
+\end{definition}
+\textbf{Поведение по умолчанию (через \texttt{allocator\_traits}):}
+\begin{itemize}
+  \item Если в аллокаторе явно определён метод \texttt{select\_on\_container\_copy\_construction()} --- вызывается именно он (то есть автор аллокатора сам решает, какое поведение нужно).
+  \item Если метод не определён --- по умолчанию просто возвращается копия того же самого аллокатора (\texttt{return *this;}).
+\end{itemize}
+\begin{lstlisting}[language=C++]
+template <typename T, typename Alloc>
+Vector<T, Alloc>::Vector(const Vector& other)
+    : alloc_(AllocTraits::select_on_container_copy_construction(other.alloc_)) {
+    // ... копируем элементы, используя alloc_
+}
+\end{lstlisting}
+\subsubsection{\texttt{propagate\_on\_container\_copy\_assignment}}
+\begin{definition}{propagate\_on\_container\_copy\_assignment}{}
+Булевый \texttt{using} внутри аллокатора (через \texttt{allocator\_traits}), указывающий, нужно ли при копирующем присваивании контейнера (\texttt{v2 = v1;}) ещё и присвоить сам аллокатор (\texttt{alloc\_ = other.alloc\_}).
+\end{definition}
+\begin{lstlisting}[language=C++]
+template <typename T, typename Alloc>
+Vector<T, Alloc>& Vector<T, Alloc>::operator=(const Vector& other) {
+    if constexpr (AllocTraits::propagate_on_container_copy_assignment::value) {
+        alloc_ = other.alloc_; // забираем себе чужой аллокатор
+    }
+    // ... обычное копирование элементов (copy-and-swap и т.п.)
+    return *this;
+}
+\end{lstlisting}
+\textbf{Если \texttt{true}} --- значит, при присваивании контейнер должен взять себе \textbf{другой} аллокатор (от того, кого присваивают). \textbf{Если \texttt{false}} (значение по умолчанию) --- свой собственный аллокатор остаётся прежним, меняется только содержимое контейнера.
+\subsubsection{\texttt{propagate\_on\_container\_move\_assignment}}
+Полный аналог предыдущего пункта, но для \textbf{перемещающего} присваивания (\texttt{v2 = std::move(v1);}). Если \texttt{true} --- аллокатор тоже перемещается вместе с данными; если \texttt{false} --- аллокатор контейнера-приёмника остаётся прежним, а элементы приходится не "просто забрать целиком", а аккуратно переместить по одному в уже существующий буфер с другим аллокатором (что заметно дороже).
 \subsubsection{Rebind аллокаторов}
+\textbf{Проблема:} например, у \texttt{std::list} внутри хранятся не сами элементы типа \texttt{T}, а узлы \texttt{Node<T>} (с указателями \texttt{next}/\texttt{prev}, см. секцию "на хор"). Но снаружи пользователь передаёт аллокатор для \texttt{T} (\texttt{Allocator<T>}), а внутри списку реально нужен аллокатор \textbf{для узлов} (\texttt{Allocator<Node<T>>}). Нужен способ "переключить" аллокатор на другой тип, сохранив его настройки.
+\textbf{Старый способ} (до std::allocator\_traits) --- вложенный шаблон \texttt{rebind} внутри самого аллокатора:
+\begin{lstlisting}[language=C++]
+template <typename T>
+struct Allocator {
+    template <typename U>
+    struct rebind { using other = Allocator<U>; };
+};
+// использование: typename Allocator<T>::template rebind<Node<T>>::other
+\end{lstlisting}
+Это неудобно писать и почти всегда одинаково для разных аллокаторов, поэтому современный способ --- через \texttt{allocator\_traits}:
+\begin{implementation}{Современный rebind через allocator\_traits}{}
+\begin{lstlisting}[language=C++]
+template <typename T, typename Alloc = std::allocator<T>>
+class List {
+ private:
+    using AllocTraits = std::allocator_traits<Alloc>;
+    using NodeAlloc = typename AllocTraits::template rebind_alloc<Node>;
+    using NodeAllocTraits = typename AllocTraits::template rebind_traits<Node>; // = allocator_traits<NodeAlloc>
+
+    NodeAlloc alloc_; // храним именно аллокатор для Node, а не для T
+};
+\end{lstlisting}
+\end{implementation}
+\textbf{Откуда взялся \texttt{NodeAlloc}, если снаружи передали \texttt{Alloc} для \texttt{T}:} любой "нормальный" (соответствующий стандартным требованиям) аллокатор обязан уметь сконструироваться от аллокатора того же шаблона, но для другого типа --- то есть \texttt{NodeAlloc} конструируется прямо из объекта типа \texttt{Alloc}, просто "перенастраиваясь" на новый тип элемента.
+\textbf{Про равенство и копирование аллокаторов:} когда копируют контейнеры с кастомными аллокаторами (например, своим pool-аллокатором), не до конца очевидно, должен ли новый аллокатор работать с тем же самым пулом памяти или завести свой. Стандартное соглашение: два аллокатора считаются "равными" (\texttt{operator==}), если один может безопасно деаллоцировать память, выделенную другим --- лучше ориентироваться именно на это соглашение при написании своих аллокаторов.
 \subsubsection{Реализация: конструктор копирования, копирующее и перемещающее присваивание для \texttt{list}}
+Собираем всё вместе на примере собственного \texttt{list} с аллокатором:
+\begin{implementation}{Конструктор копирования}{}
+\begin{lstlisting}[language=C++]
+template <typename T, typename Alloc>
+List<T, Alloc>::List(const List& other)
+    : alloc_(NodeAllocTraits::select_on_container_copy_construction(other.alloc_)) {
+    try {
+        for (const T& value : other) {
+            push_back(value); // push_back сам пользуется NodeAllocTraits::construct
+        }
+    } catch (...) {
+        clear(); // если на полпути исключение -- аккуратно разрушаем уже созданные узлы
+        throw;
+    }
+}
+\end{lstlisting}
+\end{implementation}
+\begin{implementation}{Копирующее присваивание}{}
+\begin{lstlisting}[language=C++]
+template <typename T, typename Alloc>
+List<T, Alloc>& List<T, Alloc>::operator=(const List& other) {
+    if (this == &other) return *this;
+
+    List tmp(other); // copy-and-swap, см. секцию "на уд"
+    if constexpr (NodeAllocTraits::propagate_on_container_copy_assignment::value) {
+        alloc_ = other.alloc_;
+    }
+    swap(tmp);
+    return *this;
+}
+\end{lstlisting}
+\end{implementation}
+\begin{implementation}{Перемещающее присваивание}{}
+\begin{lstlisting}[language=C++]
+template <typename T, typename Alloc>
+List<T, Alloc>& List<T, Alloc>::operator=(List&& other) noexcept {
+    if constexpr (NodeAllocTraits::propagate_on_container_move_assignment::value) {
+        clear();
+        alloc_ = std::move(other.alloc_);
+        StealNodesFrom(other); // просто забираем указатели на узлы, без копирования
+    } else if (alloc_ == other.alloc_) {
+        clear();
+        StealNodesFrom(other); // аллокаторы совместимы -- тоже можно просто забрать узлы
+    } else {
+        clear();
+        for (T& value : other) { // аллокаторы разные -- придётся честно перекладывать по одному
+            push_back(std::move(value));
+        }
+        other.clear();
+    }
+    return *this;
+}
+\end{lstlisting}
+\end{implementation}
+\textbf{Главная идея всех трёх реализаций} одна и та же: где можно (аллокаторы совпадают или \texttt{propagate} разрешает забрать чужой) --- просто "перевешиваем" указатели на узлы без единого копирования объектов \texttt{T}; и только если аллокаторы реально разные и забирать узлы напрямую нельзя (узел, выделенный одним аллокатором, нельзя освободить другим) --- приходится honestly копировать/перемещать элементы по одному, создавая новые узлы через свой собственный аллокатор.
 
 \subsection{\texttt{std::forward}}
 \subsubsection{Реализация и детальный разбор всех случаев}
+Сама задача и полный пошаговый вывод реализации \texttt{std::forward} (включая обе перегрузки и причину, по которой нужна именно такая запись) уже подробно разобраны в секции "на хор" (раздел "Perfect forwarding"). Здесь --- итоговая реализация и сводка по всем случаям, чтобы держать это перед глазами целиком:
+\begin{implementation}{Полная реализация std::forward}{}
+\begin{lstlisting}[language=C++]
+template <typename T>
+T&& forward(std::remove_reference_t<T>& x) noexcept { // перегрузка 1: принимает lvalue
+    return static_cast<T&&>(x);
+}
+
+template <typename T>
+T&& forward(std::remove_reference_t<T>&& x) noexcept { // перегрузка 2: принимает rvalue
+    static_assert(!std::is_lvalue_reference_v<T>);
+    return static_cast<T&&>(x);
+}
+\end{lstlisting}
+\end{implementation}
+\textbf{Таблица всех случаев} (для вызова внутри обобщённой функции вида \texttt{template <typename T> void f(T\&\& arg) \{ g(std::forward<T>(arg)); \}}):
+\begin{center}
+\begin{tabular}{|l|l|l|l|}
+\hline
+\textbf{Что передали в \texttt{f}} & \textbf{Выведенный T} & \textbf{Перегрузка forward} & \textbf{Что вернёт forward} \\
+\hline
+lvalue (\texttt{int x; f(x);}) & \texttt{int\&} & 1-я (принимает \texttt{Type\&}) & \texttt{int\&} (lvalue) \\
+rvalue (\texttt{f(5);}) & \texttt{int} & 2-я (принимает \texttt{Type\&\&}) & \texttt{int\&\&} (rvalue) \\
+const lvalue & \texttt{const int\&} & 1-я (\texttt{const int\&}) & \texttt{const int\&} \\
+xvalue (\texttt{f(std::move(x));}) & \texttt{int} & 2-я & \texttt{int\&\&} \\
+\hline
+\end{tabular}
+\end{center}
+\textbf{Главный вывод, который стоит унести с экзамена:} \texttt{std::forward<T>(x)} --- это не "ещё один \texttt{move}", а условный каст, сохраняющий ту же категорию значения (lvalue/rvalue), с которой аргумент изначально пришёл в шаблонную функцию. Именно явно указанный \texttt{T} в \texttt{std::forward<T>(x)} несёт в себе информацию о том, что было передано изначально --- сам \texttt{x} внутри функции всегда lvalue (у него есть имя), и без явного \texttt{T} \texttt{forward} никак не смог бы понять, какую перегрузку выбрать.
 
 \subsection{Вывод типов}
 \subsubsection{\texttt{decltype} и отличия от \texttt{auto}}
+\begin{definition}{decltype}{}
+\texttt{decltype(expr)} --- метафункция, которая на этапе компиляции возвращает \textbf{точный} тип выражения \texttt{expr}, \textbf{с сохранением} ссылок и \texttt{const} (в отличие от \texttt{auto}, который их отбрасывает, см. секцию "на уд").
+\end{definition}
+\begin{lstlisting}[language=C++]
+int x;
+decltype(x) u = x; // u -- int
+\end{lstlisting}
+\textbf{Правила вывода типа в decltype зависят от категории значения} (см. секцию "на хор", категории значений):
+\begin{enumerate}
+  \item Если \texttt{expr} --- prvalue типа \texttt{T}, то \texttt{decltype(expr)} = \texttt{T} (например, \texttt{decltype(x++)} -- ведь постфиксный \texttt{++} возвращает временный объект).
+  \item Если \texttt{expr} --- lvalue типа \texttt{T}, то \texttt{decltype(expr)} = \texttt{T\&} (например, \texttt{decltype(++x)} -- префиксный \texttt{++} возвращает ссылку).
+  \item Если \texttt{expr} --- xvalue типа \texttt{T}, то \texttt{decltype(expr)} = \texttt{T\&\&} (например, \texttt{decltype(std::move(x))}).
+\end{enumerate}
+\textbf{Важная и неочевидная тонкость:} \texttt{decltype} от \textbf{голого имени переменной} (а не выражения) --- особый случай, он всегда даёт ровно тот тип, с которым переменная объявлена, без дополнительных правил выше:
+\begin{lstlisting}[language=C++]
+int x;
+decltype(x)& y = x;  // decltype(x) = int, y -- int&
+decltype(x)* yy = &x; // decltype(x) = int, yy -- int*
+\end{lstlisting}
+\textbf{Ещё более тонкий момент:} на \texttt{decltype(переменная-ссылка)} нельзя "повторно" навесить \texttt{const}, как кажется на первый взгляд:
+\begin{lstlisting}[language=C++]
+template <typename T> void f() = delete;
+
+int x;
+int& y = x;
+const decltype(y) z = x; // decltype(y) = int& (см. правило выше, y -- lvalue типа int)
+f<decltype(z)>();         // CE-сообщение покажет: T = int&, а НЕ const int&!
+\end{lstlisting}
+\textbf{Почему так:} \texttt{const} здесь пытается навеситься на сам \texttt{decltype(y)} (то есть на \texttt{int\&}), но ссылку нельзя сделать "константной" в привычном смысле --- ссылку и так нельзя перепривязать к другому объекту, поэтому \texttt{const} перед ссылочным типом просто игнорируется компилятором, и тип остаётся \texttt{int\&}.
+\textbf{Важно:} \texttt{decltype} \textbf{не вычисляет} переданное в него выражение, а только анализирует его тип на этапе компиляции:
+\begin{lstlisting}[language=C++]
+int x = 0;
+decltype(++x) y = x; // ++x НЕ выполняется реально, просто узнаём тип
+++y;
+std::cout << x << y; // 1 1, а не 2 1 -- инкремент внутри decltype не сработал
+\end{lstlisting}
 \subsubsection{\texttt{decltype(auto)}}
+\textbf{Проблема, которую решает:} иногда хочется, чтобы возвращаемый тип шаблонной функции в точности повторял тип какого-то выражения (со всеми ссылками), но \texttt{x} в сигнатуре ещё "не объявлен" в момент, когда нужно написать тип:
+\begin{lstlisting}[language=C++]
+template <typename T>
+decltype(some_func(x)) g(const T& x) { // CE: x используется до объявления
+    return some_func(x);
+}
+\end{lstlisting}
+\textbf{Решение через trailing return type} (см. секцию "на уд") --- к моменту, когда компилятор разбирает часть после \texttt{->}, параметры уже объявлены:
+\begin{lstlisting}[language=C++]
+template <typename T>
+auto g(const T& x) -> decltype(some_func(x)) {
+    return some_func(x);
+}
+
+template <typename Container>
+auto get(const Container& c, size_t i) -> decltype(c[i]) { // например, для своего "умного" вектора
+    return c[i]; // не всегда возвращает T&: vector<bool> возвращает временный объект-обёртку
+}
+\end{lstlisting}
+Начиная с C++14 это можно записать короче через \texttt{decltype(auto)} --- это заставляет компилятор выводить возвращаемый тип \textbf{по правилам \texttt{decltype}}, а не по правилам \texttt{auto}:
+\begin{lstlisting}[language=C++]
+template <typename Container>
+decltype(auto) get(const Container& c, size_t i) {
+    return c[i]; // тип результата выводится ровно так же, как decltype(c[i])
+}
+\end{lstlisting}
+\texttt{decltype(auto)} можно использовать и просто при объявлении переменной (не только как возвращаемый тип функции):
+\begin{lstlisting}[language=C++]
+int main() {
+    int x = 0;
+    int& y = x;
+    decltype(auto) z = y; // z -- int& (а обычный auto z = y; дал бы просто int, см. "на уд")
+}
+\end{lstlisting}
 \subsubsection{\texttt{auto} в аргументах функции и шаблонных аргументах}
+Эти случаи уже подробно разобраны в секции "на уд" (\texttt{void f(auto\&\& x)} как сокращение для шаблонной функции, и \texttt{template <auto N> struct Test \{\};} для non-type параметра произвольного типа, выводимого автоматически). Дополнительный важный факт: \texttt{auto} как шаблонный non-type параметр умеет выводить даже \texttt{std::initializer\_list}, чего обычный шаблонный параметр делать не умеет:
+\begin{lstlisting}[language=C++]
+template <auto N> struct Test {};
+Test<2> t;   // N выводится как int
+Test<'a'> tt; // N выводится как char
+\end{lstlisting}
 \subsubsection{Structured bindings: как заставить работать со своим классом}
+\begin{definition}{Structured bindings}{}
+Синтаксис (с C++17), позволяющий "распаковать" объект сразу в несколько именованных переменных: \texttt{auto [a, b] = expr;}. Работает "из коробки" для \texttt{std::pair}, \texttt{std::tuple}, обычных массивов и структур с публичными полями.
+\end{definition}
+\begin{lstlisting}[language=C++]
+std::pair<int, std::string> p(5, "abc");
+auto [a, b] = p; // a -- int (копия p.first), b -- std::string (копия p.second)
+\end{lstlisting}
+\textbf{Замечание:} как и с обычным \texttt{auto}, на квадратные скобки можно навешивать \texttt{\&}/\texttt{const}: \texttt{auto\& [a, b] = p;} даст ссылки на реальные поля \texttt{p}, а не их копии.
+\textbf{Чтобы structured bindings заработали для своего класса} (не структуры с публичными полями, а класса с произвольной внутренней логикой), нужно реализовать тот же протокол, что и у \texttt{std::tuple}: специализировать \texttt{std::tuple\_size}, \texttt{std::tuple\_element} и предоставить функции/методы \texttt{get<N>()}.
+\begin{implementation}{Пример: своя пара координат}{}
+\begin{lstlisting}[language=C++]
+struct Point {
+    double x, y;
+};
+
+template <std::size_t N>
+auto get(const Point& p) {
+    if constexpr (N == 0) return p.x;
+    else if constexpr (N == 1) return p.y;
+}
+
+template <> struct std::tuple_size<Point>: std::integral_constant<std::size_t, 2> {};
+template <> struct std::tuple_element<0, Point> { using type = double; };
+template <> struct std::tuple_element<1, Point> { using type = double; };
+
+int main() {
+    Point p{1.0, 2.0};
+    auto [x, y] = p; // компилятор сам подставит get<0>(p) и get<1>(p)
+}
+\end{lstlisting}
+\end{implementation}
+\textbf{Как компилятор это использует:} \texttt{std::tuple\_size<Point>::value} говорит ему, сколько переменных ожидать слева (тут 2), \texttt{std::tuple\_element<N, Point>::type} --- какой тип будет у N-й переменной, а вызовы \texttt{get<0>(p)}, \texttt{get<1>(p)}, ... дают сами значения.
 \subsubsection{\texttt{std::tuple}: пользование и идея реализации}
+\begin{definition}{std::tuple}{}
+Обобщение \texttt{std::pair} на произвольное количество элементов произвольных типов --- "кортеж" фиксированного размера, известного на этапе компиляции.
+\end{definition}
+\begin{implementation}{Использование}{}
+\begin{lstlisting}[language=C++]
+std::tuple<int, std::string, double> t(1, "abc", 3.14);
+std::cout << std::get<0>(t) << " " << std::get<1>(t) << " " << std::get<2>(t);
+
+auto [a, b, c] = t; // тоже работает через structured bindings
+\end{lstlisting}
+\end{implementation}
+\textbf{Идея реализации} --- рекурсивное наследование, каждый "уровень" хранит ровно один элемент (тот же приём, что и с variadic templates, см. секцию "на хор"):
+\begin{lstlisting}[language=C++]
+template <typename... Types>
+struct tuple {}; // базовый случай: пустой tuple
+
+template <typename Head, typename... Tail>
+struct tuple<Head, Tail...>: tuple<Tail...> { // наследуемся от "хвоста"
+    Head value;
+    tuple(Head head, Tail... tail): tuple<Tail...>(tail...), value(head) {}
+};
+\end{lstlisting}
+\textbf{Как это работает:} \texttt{tuple<int, std::string, double>} на самом деле "разворачивается" в цепочку наследования: класс с полем \texttt{int value}, унаследованный от класса с полем \texttt{std::string value}, унаследованного от класса с полем \texttt{double value}, унаследованного от пустого \texttt{tuple<>}. Каждый уровень хранит ровно один элемент --- поэтому \texttt{sizeof(tuple<int, std::string, double>)} примерно равен сумме размеров всех элементов (плюс возможное выравнивание).
+\textbf{Доступ через \texttt{std::get<N>}} реализуется через рекурсивный спуск по этой иерархии наследования (на каждом шаге уменьшая \texttt{N} на 1, пока не дойдём до нужного уровня, где \texttt{N == 0} и нужное поле \texttt{value} лежит прямо в текущем классе) --- по духу очень похоже на реализацию \texttt{is\_same\_many} и других рекурсивных метафункций от пакета параметров.
 
 \subsection{Умные указатели и наследование}
 \subsubsection{Проблема указателя на наследника}
+\textbf{Хотим, чтобы это работало:}
+\begin{lstlisting}[language=C++]
+struct Base {};
+struct Derived: public Base {};
+
+int main() {
+    auto ptr = std::make_shared<Derived>();
+    std::shared_ptr<Base> b_ptr = ptr; // хотим работать с Derived через указатель на Base
+}
+\end{lstlisting}
+И это, конечно, должно работать --- иначе вообще нельзя было бы пользоваться полиморфизмом через \texttt{shared\_ptr}. Но тут есть тонкость: \texttt{shared\_ptr<Derived>} и \texttt{shared\_ptr<Base>} --- это \textbf{разные шаблонные инстанциации}, у каждой свой шаблонный параметр. А control block (см. секцию "на хор") внутри хранит реальный объект (или указатель на него) типа \texttt{Derived}, хотя снаружи мы работаем через \texttt{shared\_ptr<Base>}. Получается, шаблонный параметр самого \texttt{shared\_ptr} и реальный тип, который хранит control block, могут \textbf{не совпадать}. Полное решение этой задачи (как control block "помнит" реальный тип, чтобы корректно вызвать его деструктор, даже если снаружи остался только \texttt{shared\_ptr<Base>}) --- классическая задача-головоломка, мы её здесь разбирать не будем, но важно понимать саму суть проблемы.
+\textbf{Касты умных указателей:} все знакомые касты (см. секцию "на хор" и "на уд") имеют версии, работающие прямо с \texttt{shared\_ptr}, а не с сырыми указателями:
+\begin{lstlisting}[language=C++]
+std::static_pointer_cast<Derived>(base_ptr);
+std::dynamic_pointer_cast<Derived>(base_ptr);
+std::const_pointer_cast<T>(const_ptr);
+std::reinterpret_pointer_cast<T>(ptr);
+\end{lstlisting}
+Реализация у них несложная (внутри просто кастуют сырой указатель и заново оборачивают его в \texttt{shared\_ptr}, аккуратно деля общий control block со старым указателем).
 \subsubsection{CRTP}
+\begin{definition}{CRTP (Curiously Recurring Template Pattern)}{}
+"Странно рекурсивный шаблонный паттерн" --- класс наследуется от шаблона, в качестве шаблонного параметра которого передаёт \textbf{сам себя}.
+\end{definition}
+\begin{lstlisting}[language=C++]
+template <typename Derived>
+struct Base {
+    void Interface() {
+        static_cast<Derived*>(this)->Implementation(); // вызов "виртуального" метода без virtual!
+    }
+};
+
+struct Impl: Base<Impl> { // наследуемся от шаблона себя же
+    void Implementation() { std::cout << "Impl"; }
+};
+\end{lstlisting}
+\textbf{Зачем это нужно:} это способ получить что-то похожее на динамический полиморфизм (общий интерфейс в базовом классе, конкретная реализация в наследнике), но \textbf{без} накладных расходов на виртуальные функции (без vtable, без указателя на неё) --- весь выбор реализации происходит на этапе компиляции, через \texttt{static\_cast<Derived*>(this)}.
 \subsubsection{\texttt{enable\_shared\_from\_this}: реализация}
+\textbf{Проблема:} иногда нужно изнутри метода класса вернуть \texttt{shared\_ptr} на сам себя (\texttt{this}). Но просто написать \texttt{return std::shared\_ptr<S>(this);} нельзя --- это создаст \textbf{новый, независимый} control block, и получится double free, когда оба control block-а попытаются удалить один и тот же объект.
+\textbf{Наивное решение} --- хранить в классе поле \texttt{weak\_ptr} на самого себя --- работает, но неудобно: пришлось бы заводить такое поле и руками проставлять его в каждом классе, которому это нужно.
+\textbf{Решение стандартной библиотеки} --- унаследоваться от \texttt{std::enable\_shared\_from\_this<T>} (это и есть пример CRTP из предыдущего пункта):
+\begin{implementation}{Использование}{}
+\begin{lstlisting}[language=C++]
+struct S: public std::enable_shared_from_this<S> {
+    std::shared_ptr<S> GetPtr() const {
+        return shared_from_this(); // метод появляется "бесплатно" из enable_shared_from_this
+    }
+};
+\end{lstlisting}
+\end{implementation}
+\begin{implementation}{Идея реализации enable\_shared\_from\_this}{}
+\begin{lstlisting}[language=C++]
+template <typename T>
+class enable_shared_from_this {
+ protected:
+    std::shared_ptr<T> shared_from_this() const {
+        return ptr_.lock(); // просто "поднимаем" weak_ptr до shared_ptr
+    }
+ private:
+    std::weak_ptr<T> ptr_;
+};
+\end{lstlisting}
+\end{implementation}
+\textbf{Главный вопрос:} а кто и когда проставляет это поле \texttt{ptr\_}? Ответ: сам \texttt{shared\_ptr}, в своих конструкторах, через небольшую compile-time проверку (\texttt{if constexpr}, см. дальше в этой секции вместе с \texttt{std::is\_base\_of}):
+\begin{lstlisting}[language=C++]
+template <typename T>
+shared_ptr<T>::shared_ptr(T* ptr) {
+    // ... обычная инициализация control block-а ...
+    if constexpr (std::is_base_of_v<enable_shared_from_this<T>, T>) {
+        ptr->ptr_ = weak_ptr<T>(*this); // незаметно для пользователя проставляем weak_ptr
+    }
+}
+\end{lstlisting}
+\textbf{Замечание:} ту же проверку и проставление нужно повторить и в других местах создания \texttt{shared\_ptr} (например, в конструкторе от уже готового control block-а, который использует \texttt{make\_shared}), и в \texttt{weak\_ptr} нужен подходящий приватный конструктор, способный принять control block напрямую.
 \subsubsection{Проблема кастомных \texttt{deleter} и \texttt{allocator}}
+У \texttt{shared\_ptr<T>} всего один шаблонный параметр --- сам тип \texttt{T}, без отдельных параметров для deleter/allocator (в отличие от \texttt{unique\_ptr<T, Deleter>}). Кастомный deleter передаётся не в шаблонные параметры, а просто в конструктор:
+\begin{lstlisting}[language=C++]
+std::shared_ptr<int> ptr(new int(5), MyAwesomeDeleter);
+std::shared_ptr<int> ptr_2 = ptr; // ptr_2 ОБЯЗАН помнить про MyAwesomeDeleter!
+\end{lstlisting}
+\textbf{Проблема:} раз тип deleter-а нигде не "прибит гвоздями" к типу самого \texttt{shared\_ptr}, его придётся хранить где-то в control block-е --- но сам \texttt{shared\_ptr<T>} ничего не знает про конкретный тип \texttt{Deleter}, поэтому простое поле \texttt{ControlBlock<T, Deleter>* block\_;} внутри \texttt{shared\_ptr<T>} тоже не получится завести напрямую (опять разные шаблонные инстанциации, как и с проблемой указателя на наследника выше).
 \subsubsection{Type-erasure, \texttt{std::any}: идея реализации}
+\begin{definition}{Type erasure ("стирание типа")}{}
+Приём, позволяющий через единый (нешаблонный) интерфейс работать с объектами \textbf{произвольных}, заранее неизвестных типов, "пряча" конкретный тип внутри полиморфной иерархии (база + шаблонный наследник).
+\end{definition}
+Именно type erasure и решает проблему кастомного deleter-а (и аналогично --- \texttt{std::any}, \texttt{std::function}, рассмотренный в секции "на хор").
+\begin{implementation}{std::any -- использование}{}
+\begin{lstlisting}[language=C++]
+std::any a = 5;            // храним int
+a = std::vector<int>{1,2}; // теперь храним vector<int>
+a = 'a';                    // теперь храним char
+
+std::cout << std::any_cast<char>(a); // достаём, явно указав ожидаемый тип
+// std::any_cast<int>(a) бросит std::bad_any_cast, если там реально лежит char
+\end{lstlisting}
+\end{implementation}
+\textbf{Главная сложность реализации:} \texttt{Any} должен уметь хранить объект \textbf{произвольного} типа и при этом корректно его удалять --- а ведь типы для удаления нужны разные, и просто хранить \texttt{void*} недостаточно (по \texttt{void*} нельзя вызвать правильный деструктор).
+\begin{implementation}{Реализация через type erasure}{}
+\begin{lstlisting}[language=C++]
+struct Any {
+    struct Base {
+        virtual ~Base() = default; // виртуальный деструктор -- ключ ко всей идее
+    };
+
+    template <typename T>
+    struct Derived: public Base { // шаблонный наследник, который ЗНАЕТ конкретный тип
+        T object;
+        Derived(const T& object): object(object) {}
+    };
+
+    template <typename U>
+    Any(const U& object): ptr(new Derived<U>(object)) {}
+
+    ~Any() {
+        delete ptr; // вызовется виртуальный ~Base(), а через него -- правильный ~Derived<U>()
+    }
+
+    Base* ptr = nullptr;
+};
+\end{lstlisting}
+\end{implementation}
+\textbf{Вот и весь фокус:} снаружи \texttt{Any} хранит просто \texttt{Base*} (нешаблонный, единый тип указателя), а реальный тип объекта "спрятан" внутри \texttt{Derived<U>}, видимый только в момент создания. Виртуальный деструктор \texttt{Base} гарантирует, что при \texttt{delete ptr} вызовется \textbf{правильная} (для конкретного \texttt{U}) версия деструктора, хотя статически мы про \texttt{U} уже ничего не знаем.
 \subsubsection{Решение проблем с кастомными \texttt{deleter}/\texttt{allocator}}
+Применяем точно тот же приём type erasure к control block-у \texttt{shared\_ptr}: вводим базовый (нешаблонный по deleter-у) класс с виртуальным деструктором, а конкретный deleter "прячем" в наследнике:
+\begin{implementation}{Полиморфный control block}{}
+\begin{lstlisting}[language=C++]
+template <typename T>
+struct BaseControlBlock {
+    T object;
+    size_t shared_count;
+    size_t weak_count;
+
+    virtual ~BaseControlBlock() = default; // ключевая деталь, как и в Any
+};
+
+template <typename T, typename Deleter>
+struct ControlBlock: BaseControlBlock<T> {
+    Deleter deleter;
+    ~ControlBlock() override { deleter(&this->object); } // используем правильный deleter
+};
+\end{lstlisting}
+\end{implementation}
+Сам \texttt{shared\_ptr<T>} хранит указатель только на \texttt{BaseControlBlock<T>*} (нешаблонный по deleter-у тип), а реальный \texttt{Deleter} "спрятан" внутри конкретного \texttt{ControlBlock<T, Deleter>}, доступного только через виртуальный вызов деструктора --- ровно та же идея, что и в \texttt{Any}.
+\textbf{Что ещё остаётся доработать} (для полноценной production-реализации): поддержать кастомный аллокатор (аналогично deleter-у, ещё одним шаблонным параметром control block-а), а также случай, когда \texttt{shared\_ptr} должен хранить не сам объект \texttt{T} внутри control block-а, а просто указатель на него (если объект был создан отдельно, не через \texttt{make\_shared}). На практике это решается ещё одним (третьим) видом control block-а --- так что в реальных реализациях \texttt{shared\_ptr} обычно использует целое семейство из нескольких разных control block-ов под разные ситуации.
 
 \subsection{Type-traits: конструктор по умолчанию}
 \subsubsection{\texttt{declval}}
+\textbf{Вспомним проблему из секции "на хор"} (проверка наличия метода \texttt{construct}): мы писали \texttt{TT().construct(AArgs()...)}, то есть вызывали конструктор по умолчанию у \texttt{TT} и у каждого из \texttt{AArgs}, просто чтобы получить выражение нужного типа. Но что, если у этих типов \textbf{нет} конструктора по умолчанию?
+\begin{definition}{declval}{}
+\texttt{std::declval<T>()} --- "фиктивная" функция, которая нужна только на этапе компиляции и позволяет получить выражение типа \texttt{T} (точнее, \texttt{T\&\&}), \textbf{не вызывая никакого реального конструктора}.
+\end{definition}
+\textbf{Первая, наивная попытка реализации:}
+\begin{lstlisting}[language=C++]
+template <typename T>
+T declval() noexcept; // только объявление, без тела!
+\end{lstlisting}
+\textbf{Важно:} у \texttt{declval} нет (и не должно быть) тела --- эта функция никогда не вызывается по-настоящему, она существует только для того, чтобы её можно было подставить внутрь \texttt{decltype(...)} (то есть в контекст, где выражение анализируется, но не выполняется, см. \texttt{decltype} в этой же секции).
+\begin{implementation}{Применение в has\_method\_construct}{}
+\begin{lstlisting}[language=C++]
+template <typename T, typename... Args>
+struct has_method_construct {
+ private:
+    template <typename TT, typename... AArgs>
+    static auto f(int) -> decltype(declval<TT>().construct(declval<AArgs>()...), int());
+
+    template <typename...>
+    static char f(...);
+ public:
+    static const bool value = std::is_same_v<decltype(f<T, Args...>(0)), int>;
+};
+\end{lstlisting}
+\end{implementation}
+Теперь работает даже для типов без конструктора по умолчанию --- мы нигде реально не создаём объект \texttt{TT}, а только "притворяемся", что он у нас есть, ради проверки типа выражения.
+\textbf{На самом деле \texttt{declval} возвращает \texttt{T\&\&}, а не \texttt{T}:}
+\begin{lstlisting}[language=C++]
+template <typename T>
+T&& declval() noexcept;
+\end{lstlisting}
+Это даёт две дополнительные возможности: работать с типами, у которых вообще нет видимого определения (incomplete type --- объявлен, но не определён), и не заставлять компилятор зря инстанцировать шаблонный тип только ради того, чтобы узнать тип выражения.
 \subsubsection{\texttt{move\_if\_noexcept}: идея реализации}
+\textbf{Вспомним} реализацию \texttt{reserve} вектора из секции "на хор": при переезде элементов в новый буфер мы используем \texttt{std::move(arr\_[i])}. Но если move-конструктор элемента может бросить исключение (не помечен \texttt{noexcept}), а мы уже успели частично замувать элементы --- откатить операцию назад честно (strong guarantee) не получится: исходные элементы уже испорчены, а скопировать обратно (раз они замуваны) уже нечего.
+\begin{definition}{move\_if\_noexcept}{}
+Возвращает rvalue-ссылку (разрешая move), \textbf{только если} move-конструктор типа гарантированно не бросает исключений; иначе возвращает константную lvalue-ссылку, вынуждая использовать более медленный, но безопасный конструктор копирования.
+\end{definition}
+\begin{implementation}{Идея реализации (упрощённо)}{}
+\begin{lstlisting}[language=C++]
+template <typename T>
+struct move_if_noexcept_cond:
+    std::conjunction<std::negation<std::is_nothrow_move_constructible<T>>,
+                      std::is_copy_constructible<T>> {}; // true, если move рискованный, но copy есть
+
+template <typename T>
+constexpr std::conditional_t<move_if_noexcept_cond<T>::value, const T&, T&&>
+move_if_noexcept(T& x) noexcept {
+    return std::move(x);
+}
+\end{lstlisting}
+\end{implementation}
+\textbf{Вся хитрость --- в возвращаемом типе}, а не в теле функции (тело у обеих веток одно и то же --- \texttt{return std::move(x);}): если move \textbf{не} гарантированно безопасен (нет \texttt{noexcept}), но копировать можно --- возвращаемый тип становится \texttt{const T\&}, и тогда из вызывающего кода (\texttt{T tmp = move\_if\_noexcept(x);}) вызовется конструктор \textbf{копирования} (потому что инициализация идёт через lvalue-ссылку). Если же move безопасен (или копировать вообще нельзя) --- возвращаемый тип \texttt{T\&\&}, и вызовется move-конструктор.
+\textbf{Практический вывод:} именно поэтому так важно помечать move-конструкторы \texttt{noexcept}, когда это действительно так (см. секцию "на хор", noexcept) --- иначе стандартные контейнеры на всякий случай переключатся на копирование вместо более быстрого перемещения.
 \subsubsection{\texttt{std::is\_base\_of}: реализация}
+Хотим написать метафункцию, проверяющую, является ли \texttt{B} (публичным, однозначным) базовым классом для \texttt{D}. Сразу попробуем набросать общий каркас через уже знакомый \texttt{std::conjunction} (логическое "И" над несколькими traits, см. секцию "на хор"):
+\begin{lstlisting}[language=C++]
+template <typename B, typename D>
+struct is_base_of: std::conjunction<
+    std::is_class<B>, // оба должны быть классами...
+    std::is_class<D>,
+    /* и тут нужна сама проверка наследования */
+> {};
+\end{lstlisting}
+\textbf{Идея проверки самого наследования} --- через перегрузку и SFINAE: попробовать неявно скастовать \texttt{D*} к \texttt{B*}. Если каст валиден --- \texttt{D} действительно наследник \texttt{B}.
+\begin{implementation}{Идея реализации}{}
+\begin{lstlisting}[language=C++]
+template <typename B>
+std::true_type test_is_base_of(const B*); // подходит, если можно скастовать переданный указатель к B*
+
+std::false_type test_is_base_of(...); // запасной вариант, если каст невозможен
+
+template <typename B, typename D>
+struct is_base_of: std::conjunction<
+    std::is_class<B>,
+    std::is_class<D>,
+    decltype(test_is_base_of<B>(static_cast<D*>(nullptr))) // именно тут проверяется наследование
+> {};
+\end{lstlisting}
+\end{implementation}
+\textbf{Как это работает:} \texttt{static\_cast<D*>(nullptr)} --- это просто способ получить выражение типа \texttt{D*}, не создавая реального объекта (по аналогии с \texttt{declval} выше). Если \texttt{D} действительно публично и однозначно наследуется от \texttt{B}, неявный каст \texttt{D*} к \texttt{const B*} существует, и подходит первая перегрузка \texttt{test\_is\_base\_of} (возвращает \texttt{true\_type}). Если каста не существует --- сработает SFINAE, и выберется вариант с \texttt{...} (\texttt{false\_type}).
+\textbf{Эта реализация работает для публичного наследования, но ломается на приватном:} если \texttt{D} наследуется от \texttt{B} приватно, неявный каст \texttt{D*} к \texttt{B*} формально \textbf{существует} с точки зрения выбора перегрузки, но запрещён из-за приватности. А приватность, как мы помним (см. секцию "на хор", виртуальные функции), проверяется компилятором \textbf{после} выбора перегрузки --- то есть слишком поздно, чтобы сработал SFINAE: вместо аккуратного "выбрали другую перегрузку" получаем честную CE про доступ к приватному базовому классу. Настоящая (production) реализация \texttt{std::is\_base\_of} устроена сложнее, чтобы аккуратно обходить и этот случай --- посмотреть её можно на \href{https://en.cppreference.com/w/cpp/types/is_base_of}{cppreference}.
 
 \subsection{Union и вариантные типы}
 \subsubsection{Union}
+\begin{definition}{Union (объединение)}{}
+Тип данных, у которого, как и у структуры, можно перечислить несколько полей, но в отличие от структуры все эти поля \textbf{делят одну и ту же область памяти} --- размер \texttt{union} равен размеру его \textbf{самого большого} поля, и в один момент времени реально "живёт" только одно из полей.
+\end{definition}
+\begin{implementation}{Базовый пример}{}
+\begin{lstlisting}[language=C++]
+union Value {
+    int as_int;
+    float as_float;
+    char as_chars[4];
+};
+
+int main() {
+    Value v;
+    v.as_int = 65;
+    std::cout << sizeof(v); // 4 -- размер самого большого поля (int и float оба по 4 байта)
+
+    v.as_float = 3.14f; // теперь как_int "затёрся", тут лежат байты float
+    std::cout << v.as_int; // UB по стандарту С++ (но многие компиляторы разрешают так делать на практике)
+}
+\end{lstlisting}
+\end{implementation}
+\textbf{Важные ограничения:} в \texttt{union} нельзя хранить поля с нетривиальными конструкторами/деструкторами без дополнительной возни (компилятор не знает, какое поле сейчас "активно", и не может сам решить, какой деструктор вызвать) --- поэтому для классов с нетривиальными конструкторами поля \texttt{union} приходится конструировать/разрушать вручную через placement new (см. секцию "на хор") и самостоятельно отслеживать, какое поле сейчас активно.
 \subsubsection{SSO в \texttt{std::string} с помощью \texttt{union}}
+\begin{definition}{SSO (Small String Optimization)}{}
+Оптимизация, при которой короткая строка хранится \textbf{прямо внутри} объекта \texttt{std::string} (на стеке, без обращения к куче), а длинная --- по-прежнему через указатель на динамически выделенный буфер.
+\end{definition}
+\textbf{Идея:} в самом \texttt{std::string} и так уже есть поля под указатель на буфер, его размер и capacity (то есть, грубо говоря, 24 байта на 64-битной системе: \texttt{char* + size\_t + size\_t}). Если строка короткая (помещается в эти же 24 байта), хранить отдельный указатель на кучу --- лишняя аллокация и лишнее обращение к памяти. SSO решает это через \texttt{union}: одна и та же память интерпретируется по-разному в зависимости от того, длинная строка или короткая.
+\begin{implementation}{Упрощённая идея устройства}{}
+\begin{lstlisting}[language=C++]
+class String {
+    union {
+        struct { // "длинная" версия: указатель на кучу
+            char* data;
+            size_t capacity;
+        } long_str;
+        char short_str[sizeof(long_str)]; // "короткая" версия: данные прямо тут
+    };
+    size_t size_;
+    bool is_long_;
+};
+\end{lstlisting}
+\end{implementation}
+\textbf{Как выбирается режим:} при каждой операции, способной изменить размер строки, проверяется, помещается ли новый размер в \texttt{short\_str} (обычно 15--22 байта, зависит от реализации STL). Если помещается --- данные лежат прямо в объекте, никакой аллокации не происходит. Если нет --- выделяется буфер на куче, и используется "длинная" часть union. Именно поэтому копирование/создание коротких строк в реальных программах оказывается значительно быстрее, чем можно было бы подумать, глядя только на интерфейс \texttt{std::string}.
 \subsubsection{\texttt{std::variant}: идея реализации}
+\begin{definition}{std::variant}{}
+"Типобезопасный union" из стандартной библиотеки (с C++17): хранит ровно одно значение из заранее перечисленного списка типов, и при этом (в отличие от голого \texttt{union}) всегда \textbf{знает}, какой именно тип сейчас активен, и умеет корректно вызывать конструкторы/деструкторы для нетривиальных типов.
+\end{definition}
+\begin{implementation}{Использование}{}
+\begin{lstlisting}[language=C++]
+std::variant<int, std::string, double> v = 5; // сейчас хранит int
+
+v = std::string("hello"); // теперь хранит string, int корректно разрушен
+
+if (std::holds_alternative<std::string>(v)) {
+    std::cout << std::get<std::string>(v);
+}
+\end{lstlisting}
+\end{implementation}
+\textbf{Идея реализации:} внутри лежит "сырая" память размером с самый большой из перечисленных типов (по сути, как и у обычного \texttt{union}, но в виде массива байт, а не настоящего \texttt{union} с полями) плюс дополнительное поле-индекс, хранящее, какой тип сейчас активен:
+\begin{lstlisting}[language=C++]
+template <typename... Types>
+class variant {
+    alignas(Types...) std::byte storage_[std::max({sizeof(Types)...})]; // память под "самый толстый" тип
+    size_t active_index_; // какой из Types сейчас реально лежит в storage_
+};
+\end{lstlisting}
+\textbf{При присваивании нового значения} (\texttt{v = std::string(...);}) variant сначала корректно разрушает текущий активный объект (вызывая его деструктор через placement-знание текущего \texttt{active\_index\_}), затем конструирует новый объект через placement new прямо в \texttt{storage\_}, и обновляет \texttt{active\_index\_}.
+\textbf{При чтении} (\texttt{std::get<T>(v)}) сначала сверяется, совпадает ли запрошенный тип \texttt{T} с реально активным (через \texttt{active\_index\_}); если нет --- кидается исключение \texttt{std::bad\_variant\_access} вместо того, чтобы молча прочитать память не того типа (как было бы с голым \texttt{union}). Именно эта проверка индекса и делает \texttt{variant} "типобезопасным" в отличие от обычного \texttt{union}.
 
 \subsection{Ranges}
 \subsubsection{Причины появления и примеры использования}
+Вспомним, как выглядела сигнатура \texttt{std::sort} до C++20:
+\begin{lstlisting}[language=C++]
+template <typename RandomIt, typename Compare>
+void sort(RandomIt first, RandomIt last, Compare comp);
+\end{lstlisting}
+\textbf{Проблемы такого подхода:}
+\begin{itemize}
+  \item Требования к \texttt{RandomIt}/\texttt{Compare} нигде явно не записаны --- они просто "подразумеваются", как и любые шаблонные требования до концептов (см. секцию "на хор").
+  \item \texttt{last} избыточно требователен: его не нужно разыменовывать, нужно только проверять \texttt{!= last}, но компилятор всё равно требует от него быть полноценным итератором того же типа.
+  \item Сортировать почти всегда хочется \textbf{весь} контейнер целиком, но приходится каждый раз явно писать \texttt{v.begin(), v.end()}.
+  \item Если нужен нестандартный компаратор (например, "сравнить людей по возрасту"), приходится каждый раз писать отдельную лямбду/функтор-компаратор, хотя по сути нужно просто "взять одно поле и сравнить".
+\end{itemize}
+В C++20 появилась библиотека \texttt{ranges}, решающая все эти проблемы разом. Новая сигнатура \texttt{std::ranges::sort}:
+\begin{lstlisting}[language=C++]
+template <std::random_access_iterator I, std::sentinel_for<I> S,
+          typename Comp = std::ranges::less, typename Proj = std::identity>
+requires std::sortable<I, Comp, Proj>
+constexpr auto sort(I first, S last, Comp comp = {}, Proj proj = {});
+\end{lstlisting}
+А ещё удобнее --- версия, принимающая весь диапазон сразу:
+\begin{lstlisting}[language=C++]
+std::vector<Person> people = { /* ... */ };
+std::ranges::sort(people, {}, &Person::age); // сортируем по полю age, без отдельной лямбды!
+\end{lstlisting}
 \subsubsection{Концепт range}
+\begin{definition}{Range (диапазон)}{}
+Любая сущность, у которой можно взять начало и конец --- определяется буквально через concept (см. секцию "на хор"):
+\end{definition}
+\begin{lstlisting}[language=C++]
+template <typename T>
+concept range = requires(T&& t) {
+    std::ranges::begin(t);
+    std::ranges::end(t);
+};
+\end{lstlisting}
+\textbf{Важная деталь:} \texttt{end()} (или \texttt{ranges::end(t)}) не обязан быть итератором того же типа, что и \texttt{begin()} --- он может быть просто "ограничителем" (\term{sentinel}), который умеет только сравниваться с итератором на равенство, но не обязан поддерживать разыменование:
+\begin{lstlisting}[language=C++]
+template <typename S, typename I>
+concept sentinel_for =
+    std::semiregular<S> && std::input_or_output_iterator<I> &&
+    /* можно сравнить S и I на равенство */;
+\end{lstlisting}
+То есть обычный итератор --- это просто частный случай sentinel-а (тот, что ещё умеет разыменовываться). На основе \texttt{range} и категорий итераторов строятся более конкретные концепты вроде \texttt{std::ranges::random\_access\_range} (range, у которого \texttt{begin()} даёт random access итератор) --- именно такой концепт и стоит первым параметром у \texttt{ranges::sort}.
 \subsubsection{\texttt{ranges::sort}}
+Помимо упрощённого вызова (весь диапазон сразу, без явных \texttt{begin}/\texttt{end}), у \texttt{ranges::sort} есть удобная \term{проекция} (четвёртый параметр) --- функция, применяемая к каждому элементу \textbf{перед} сравнением:
+\begin{implementation}{Три эквивалентных способа отсортировать людей по возрасту}{}
+\begin{lstlisting}[language=C++]
+struct Person { std::string name; int age; };
+std::vector<Person> people = { /* ... */ };
+
+std::ranges::sort(people, [](auto&& a, auto&& b) { return a.age < b.age; }); // явный компаратор
+std::ranges::sort(people, {}, [](auto&& p) { return p.age; });               // проекция-лямбда
+std::ranges::sort(people, {}, &Person::age);                                  // проекция-указатель на поле
+\end{lstlisting}
+\end{implementation}
+\textbf{Что возвращает \texttt{ranges::sort}:} не \texttt{void}, а итератор на конец отсортированного диапазона --- это позволяет сразу передать результат в следующий алгоритм без отдельной переменной: \texttt{ranges::unique(ranges::begin(vec), ranges::sort(vec));}
 \subsubsection{\texttt{borrowed\_iterator}}
+\textbf{Проблема:} если \texttt{ranges::sort} всегда честно возвращает итератор, что будет в таком коде?
+\begin{lstlisting}[language=C++]
+std::vector<int> GiveMeVector();
+auto res = std::ranges::sort(GiveMeVector()); // временный вектор уничтожится сразу после вызова!
+std::cout << *(--res); // res указывает внутрь уже разрушенного вектора -- UB
+\end{lstlisting}
+\textbf{Решение} --- специальный тип \texttt{borrowed\_iterator\_t<R>}, который ведёт себя как "безопасный optional-итератор": либо реально хранит итератор, либо (если объект был временным и реально мог исчезнуть) хранит специальное пустое значение \texttt{ranges::dangling}, с которым ничего сделать нельзя (попытка разыменовать его --- сразу CE, а не тихий UB в рантайме).
+\textbf{Когда CE действительно нужен, а когда нет:} не каждый rvalue-диапазон владеет своими данными. Например, \texttt{std::string\_view} ничем не владеет --- если временный \texttt{string\_view} уничтожен, его итераторы, указывающие на исходную строку, всё ещё валидны. Поэтому есть отдельный концепт:
+\begin{lstlisting}[language=C++]
+template <typename R>
+concept borrowed_range = std::ranges::range<R> &&
+    (std::is_lvalue_reference_v<R> || std::ranges::enable_borrowed_range<std::remove_cvref_t<R>>);
+\end{lstlisting}
+Для невладеющих типов (как \texttt{string\_view}) можно вручную выставить \texttt{enable\_borrowed\_range<T> = true}, и тогда итератор от такого временного объекта не будет считаться "провисшим".
 \subsubsection{views, sentinel, \texttt{subrange} и \texttt{common\_view}}
+\begin{definition}{View}{}
+\textbf{View} --- range с дополнительными требованиями: \textbf{ничем не владеет} (просто "смотрит" на чужие данные), копируется и перемещается за O(1) (как ссылка), и в целом ведёт себя легковесно.
+\end{definition}
+\begin{lstlisting}[language=C++]
+template <typename T>
+concept view = std::ranges::range<T> && std::movable<T> && std::ranges::enable_view<T>;
+\end{lstlisting}
+Чтобы тип считался view, нужно явно об этом заявить: унаследоваться от \texttt{view\_base} (пустой класс-маркер), специализировать \texttt{enable\_view}, либо унаследоваться от \texttt{view\_interface<T>} (приём CRTP, см. предыдущую секцию) --- последний вариант ещё и бесплатно добавляет методы вроде \texttt{empty()}, \texttt{operator bool()}, \texttt{size()}, \texttt{front()}/\texttt{back()}, в зависимости от категории итератора вашего range.
+\textbf{Простые встроенные view:}
+\begin{itemize}
+  \item \texttt{ranges::subrange} --- view от произвольной пары итератор+sentinel (не обязательно \texttt{begin()}/\texttt{end()} всего контейнера):
+\begin{lstlisting}[language=C++]
+std::multimap<int, char> m;
+auto [first, last] = m.equal_range(k); // пара итераторов
+auto view = std::ranges::subrange(first, last); // view ровно на этот диапазон
+\end{lstlisting}
+  \item \texttt{ranges::views::all} --- универсальный способ получить view от чего угодно: либо заберёт владение, если передан rvalue, либо просто обернёт в "ссылающийся" view (\texttt{ref\_view}), если передан lvalue.
+  \item \texttt{ranges::owning\_view} --- view, реально владеющий объектом (мувает его внутрь себя и запрещает копирование).
+\end{itemize}
+\begin{definition}{common\_view}{}
+View для "обратной совместимости" со старым кодом, который принимает пару итераторов \textbf{одного} типа (\texttt{void f(It first, It last)}) --- ведь современный range может иметь итератор и sentinel \textbf{разных} типов, а старый код этого не ожидает.
+\end{definition}
+\begin{lstlisting}[language=C++]
+std::vector<int> v{1, 4, 2, 8, 16, 32, 64};
+auto w = std::ranges::subrange(v.begin() + 1, EndValue<8>{}); // sentinel другого типа, не итератор!
+
+// std::sort(w.begin(), w.end()); // CE: типы begin() и end() не совпадают
+std::ranges::common_view cv(w);
+std::sort(cv.begin(), cv.end());  // OK: common_view гарантирует единый тип итератора
+\end{lstlisting}
+\textbf{Идея реализации common\_view} (упрощённо): внутри хранится "универсальный" итератор, который умеет быть либо настоящим итератором, либо sentinel-ом (например, через два \texttt{std::optional} внутри одного класса-обёртки), и снаружи всегда выглядит одним и тем же типом.
 \subsubsection{Комбинация отображений}
+\textbf{Главное семантическое свойство view:} его построение работает за O(1) и \textbf{ничего не вычисляет сразу} --- реальные вычисления откладываются до момента, когда диапазон реально обходят (это называется \term{ленивые вычисления}, pull-модель):
+\begin{lstlisting}[language=C++]
+std::vector<int> vec{1, 2, 3, 4, 5, 6, 7, 8};
+auto filtered = std::ranges::filter_view(vec, [](int x) { return x % 2 == 1; });    // O(1), ничего не посчитано
+auto transformed = std::ranges::transform_view(filtered, [](int x) { return x*x; }); // O(1), тоже
+std::ranges::copy(transformed, std::ostream_iterator<int>(std::cout, " ")); // ТОЛЬКО ТУТ реально считается
+\end{lstlisting}
+\textbf{Зачем это нужно:} без ленивых view пришлось бы делать промежуточные контейнеры на каждом шаге (фильтрануть в один вектор, потом трансформировать в другой) --- три полных прохода по данным и лишние аллокации. С view данные проходят по цепочке преобразований \textbf{один раз}, элемент за элементом.
+Чтобы не читать длинные вложенные вызовы "изнутри наружу", есть удобный синтаксис с оператором \texttt{|} (как в shell-пайплайнах):
+\begin{lstlisting}[language=C++]
+auto result = vec
+    | std::views::filter([](int x) { return x % 2 == 1; })
+    | std::views::transform([](int x) { return x * x; });
+
+std::ranges::copy(result, std::ostream_iterator<int>(std::cout, " "));
+\end{lstlisting}
+\textbf{Бонус:} цепочку преобразований можно сохранить отдельно и переиспользовать для разных диапазонов:
+\begin{lstlisting}[language=C++]
+auto pipeline = std::views::filter([](int x) { return x % 2 == 1; })
+              | std::views::transform([](int x) { return x * x; });
+
+auto r1 = vec | pipeline;
+auto r2 = lst | pipeline; // тот же набор преобразований, другой исходный диапазон
+\end{lstlisting}
 \subsubsection{Устройство \texttt{transform\_view}}
+Попробуем разобраться, как устроен \texttt{transform\_view} изнутри --- класс, который применяет функцию к каждому элементу диапазона лениво.
+\textbf{Что нужно хранить:} сам диапазон (точнее, view над ним, через \texttt{views::all} --- чтобы одинаково работать что с lvalue, что с rvalue) и саму функцию:
+\begin{lstlisting}[language=C++]
+template <std::ranges::view R, typename F>
+class transform_view: public std::ranges::view_interface<transform_view<R, F>> {
+ public:
+    template <std::ranges::viewable_range RR>
+    transform_view(RR&& r, F f)
+        : base_(std::ranges::views::all(std::forward<RR>(r))), f_(std::move(f)) {}
+
+    auto begin() { return iterator(this, std::ranges::begin(base_)); }
+    auto end() { return sentinel(std::ranges::end(base_)); }
+ private:
+    R base_;
+    F f_;
+};
+\end{lstlisting}
+\textbf{Собственный итератор} должен уметь вызвать \texttt{f\_} при разыменовании. Наивная идея --- хранить функцию прямо в итераторе (через \texttt{std::function}, см. секцию "на хор") --- плохая: \texttt{std::function} тяжёлая и медленная. Решение --- хранить в итераторе указатель на сам \texttt{transform\_view} ("родителя") и брать функцию оттуда:
+\begin{implementation}{Итератор transform\_view}{}
+\begin{lstlisting}[language=C++]
+class transform_view::iterator {
+ public:
+    iterator(transform_view* parent, std::ranges::iterator_t<R> current)
+        : parent_(parent), current_(std::move(current)) {}
+
+    decltype(auto) operator*() const { return parent_->f_(*current_); } // вызываем функцию "родителя"
+    iterator& operator++() { ++current_; return *this; }
+ private:
+    transform_view* parent_;
+    std::ranges::iterator_t<R> current_;
+};
+\end{lstlisting}
+\end{implementation}
+\textbf{Sentinel} устроен проще --- ему не нужен указатель на родителя, потому что вызывать функцию для сравнения с концом не требуется:
+\begin{lstlisting}[language=C++]
+class transform_view::sentinel {
+ public:
+    sentinel(std::ranges::sentinel_t<R> current): current_(current) {}
+    std::ranges::sentinel_t<R> base() const { return current_; }
+ private:
+    std::ranges::sentinel_t<R> current_;
+};
+
+bool operator==(const transform_view::iterator& it, const transform_view::sentinel& s) {
+    return it.base() == s.base();
+}
+\end{lstlisting}
+\textbf{Важная практическая опасность:} раз итератор \texttt{transform\_view} хранит \textbf{указатель} на сам view, итератор не должен переживать сам \texttt{transform\_view} --- если view был временным объектом, итератор от него быстро станет висячим. Поэтому привязывать итератор от выражения вроде \texttt{*std::ranges::begin(std::views::transform(v, f))} стоит очень аккуратно, не сохраняя его отдельно от исходного выражения.
 
 \subsection{\texttt{constexpr}}
+\textbf{Зачем это вообще нужно:} раньше единственным способом что-то посчитать на этапе компиляции были шаблоны (см. начало этой секции, числа Фибоначчи, проверка простоты, факториал через рекурсивные структуры). Шаблонные вычисления формально умеют всё (Тьюринг-полны), но писать так неудобно: доступны только рекурсия и условные специализации, циклы эмулировать нормально нельзя (только через ту же рекурсию, ограниченную глубиной), а код получается совсем не похож на обычный. \texttt{constexpr} даёт способ писать compile-time вычисления почти как обычный код.
 \subsubsection{\texttt{constexpr} переменные}
+\begin{definition}{constexpr-переменная}{}
+Переменная, значение которой гарантированно известно \textbf{на этапе компиляции}. Сильнее, чем просто \texttt{const}: \texttt{const} означает только "нельзя изменить во время выполнения программы", а не "известно заранее".
+\end{definition}
+\begin{lstlisting}[language=C++]
+int main() {
+    int x; std::cin >> x;
+    const int b = x;       // b -- const, но НЕ constexpr: значение неизвестно на этапе компиляции
+    std::array<int, b> arr; // CE: размеру массива-шаблона нужно constexpr-значение
+}
+\end{lstlisting}
+\textbf{Что компилятор и так знает на этапе компиляции} (без отдельного \texttt{constexpr}): литералы (\texttt{1}, \texttt{1.0}, \texttt{'c'}), значения шаблонных параметров, результат \texttt{sizeof}. \texttt{constexpr} расширяет этот список на произвольные выражения, которые вы сами явно пометили:
+\begin{lstlisting}[language=C++]
+int main() {
+    constexpr int x = 2 * 2; // компилятор обязан вычислить это значение прямо сейчас
+    std::array<int, x> arr;   // OK
+}
+\end{lstlisting}
+\textbf{Ограничение:} \texttt{constexpr}-переменная обязана иметь \term{литеральный тип} (см. ниже, "constexpr в классах") --- грубо говоря, тип, для которого в принципе возможно вычисление на этапе компиляции.
+\textbf{Тонкость: \texttt{constexpr} --- это не часть типа, а просто аннотация для компилятора}, поэтому с указателями он ведёт себя не совсем так, как обычный \texttt{const}:
+\begin{lstlisting}[language=C++]
+constexpr int arr[] = {1, 2, 3};
+constexpr int* x = &arr[0]; // НА САМОМ ДЕЛЕ это эквивалент int* const x -- константен сам указатель!
+// а вовсе не const int* x (хотя по виду записи можно было бы так подумать)
+
+constexpr const int* y = &arr[0]; // а вот это уже и сам указатель константный, и то, на что он указывает
+\end{lstlisting}
 \subsubsection{\texttt{constexpr} функции}
+\begin{definition}{constexpr-функция}{}
+Функция, помеченная \texttt{constexpr}, которую \textbf{можно} (но не обязательно) вычислить на этапе компиляции.
+\end{definition}
+\textbf{Главное правило:} если такую функцию вызвать в контексте, где требуется compile-time значение (например, как размер \texttt{std::array} или в \texttt{static\_assert}), она гарантированно посчитается на этапе компиляции. Если вызвать её как обычную функцию (в обычном рантайм-коде) --- она просто выполнится как обычная функция в рантайме, без всякой магии. Никакой гарантии compile-time выполнения в "обычных" местах нет.
+\begin{implementation}{Факториал через constexpr}{}
+\begin{lstlisting}[language=C++]
+constexpr int Factorial(int n) {
+    int result = 1;
+    for (int i = 1; i <= n; ++i) {
+        result *= i;
+    }
+    return result;
+}
+
+static_assert(Factorial(5) == 120); // вычисляется компилятором, не в рантайме
+int x = Factorial(5);                // а тут -- просто обычный вызов функции в рантайме
+\end{lstlisting}
+\end{implementation}
+\textbf{Замечание про историю:} в C++11 тело \texttt{constexpr}-функции могло состоять только из одного оператора \texttt{return} (по сути это работало просто как синтаксический сахар над шаблонными вычислениями). Начиная с C++14 механизм сильно расширили --- теперь внутри можно писать почти обычный код: циклы, локальные переменные, условные операторы. Грубо говоря, в компилятор "завезли" целый интерпретатор для выполнения такого кода прямо на этапе компиляции (этот процесс называется \term{constant evaluation}).
+\textbf{Условные операторы внутри constexpr-функций} тоже особые: все \texttt{if} внутри constexpr-функции сами по себе constexpr, поэтому, например, можно бросать исключение в недостижимой на этапе компиляции ветке --- если эта ветка реально не выполнится при compile-time вызове, она просто не будет скомпилирована для этого конкретного вызова:
+\begin{lstlisting}[language=C++]
+constexpr size_t Divide(size_t x, size_t y) {
+    if (y == 0) {
+        throw "y == 0"; // OK внутри constexpr-функции
+    }
+    return x / y;
+}
+
+constexpr size_t r = Divide(10, 2); // OK, ветка с throw не задействована
+// constexpr size_t bad = Divide(10, 0); // CE на этапе компиляции, а не рантайм-исключение!
+\end{lstlisting}
+\textbf{Что ещё разрешили в constexpr-функциях в новых стандартах} (полный и постоянно растущий список --- на \href{https://en.cppreference.com/w/cpp/language/constexpr}{cppreference}):
+\begin{itemize}
+  \item \textbf{\texttt{new}/\texttt{delete}} (с C++20) --- можно выделять память прямо на этапе компиляции, но с обязательным условием: вся выделенная память должна быть освобождена (\texttt{delete}) до выхода из самой внешней constexpr-функции, иначе вычисление не считается допустимым compile-time выражением.
+\begin{lstlisting}[language=C++]
+constexpr int* GetInt(int value) { return new int(value); }
+
+constexpr int foo() {
+    auto p = GetInt(10);
+    int result = *p;
+    delete p; // обязательно деаллоцировать до выхода из foo
+    return result;
+}
+constexpr int test = foo(); // OK
+\end{lstlisting}
+  \item \textbf{Виртуальные функции} (с C++20) --- даже динамический полиморфизм теперь можно использовать на этапе компиляции (но не виртуальное наследование):
+\begin{lstlisting}[language=C++]
+struct Base {
+    constexpr virtual int Foo() { return 1; }
+    constexpr virtual ~Base() = default;
+};
+struct Derived: Base {
+    constexpr int Foo() override { return 2; }
+};
+
+constexpr int Test() {
+    Derived d;
+    Base& b = d;
+    return b.Foo(); // виртуальный вызов прямо в compile-time!
+}
+static_assert(Test() == 2);
+\end{lstlisting}
+\end{itemize}
 \subsubsection{\texttt{constexpr} в классах}
+\begin{definition}{Литеральный тип}{}
+Тип, объект которого \textbf{может} быть constexpr-переменной. Чтобы класс был литеральным, у него должен быть constexpr-конструктор (не являющийся конструктором копирования/перемещения) и constexpr-деструктор.
+\end{definition}
+\begin{implementation}{Литеральный класс}{}
+\begin{lstlisting}[language=C++]
+class Point {
+ public:
+    constexpr Point(double x, double y): x_(x), y_(y) {}
+
+    constexpr double GetX() const { return x_; } // методы тоже стоит делать constexpr
+    constexpr double GetY() const { return y_; }
+ private:
+    double x_, y_;
+};
+
+int main() {
+    constexpr Point p(10.5, 20.5); // p целиком создаётся на этапе компиляции
+    static_assert(p.GetX() == 10.5);
+    static_assert(p.GetY() == 20.5);
+}
+\end{lstlisting}
+\end{implementation}
+\textbf{Замечание:} методы класса (не только конструктор) тоже стоит помечать \texttt{constexpr}, если хочется иметь возможность вызывать их в compile-time контексте (как \texttt{GetX}/\texttt{GetY} выше).
+\textbf{Интересный факт:} начиная с C++20 даже \texttt{std::vector} и \texttt{std::string} являются литеральными типами (за счёт поддержки \texttt{new}/\texttt{delete} в constexpr, описанной выше) --- ими тоже можно пользоваться внутри constexpr-функций, хотя и с теми же ограничениями на обязательное освобождение памяти до конца вычисления.
