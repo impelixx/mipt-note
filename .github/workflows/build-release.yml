@@ -137,7 +137,7 @@ jobs:
 
           mkdir -p release
           cp "output/$SUBJECT.pdf" "release/${SUBJECT}.pdf"
-          cp "output/$SUBJECT-${VERSION}.pdf" "release/${SUBJECT}-${VERSION}.pdf"
+          cp "output/$SUBJECT.pdf" "release/${SUBJECT}-${VERSION}.pdf"
 
       - name: Delete old release for this subject
         run: |
