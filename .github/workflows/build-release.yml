@@ -89,7 +89,6 @@ jobs:
             texlive-fonts-extra \
             texlive-lang-cyrillic \
             texlive-latex-extra \
-            texlive-pictures \
             texlive-science \
             fonts-paratype \
             latexmk
@@ -100,8 +99,8 @@ jobs:
           cd ~/.local/share/fonts/jetbrains-mono
           wget -q https://github.com/JetBrains/JetBrainsMono/releases/download/v2.304/JetBrainsMono-2.304.zip
           unzip -q JetBrainsMono-2.304.zip
-          # Remove variable fonts that xdvipdfmx cannot handle
-          rm -rf fonts/variable/
+          # Remove non-TTF fonts that xdvipdfmx cannot handle
+          rm -rf fonts/variable/ fonts/webfonts/
           fc-cache -f -v
 
       - name: Get version info
