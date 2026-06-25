@@ -35,7 +35,10 @@ build_subject() {
         echo -e "${GREEN}  ✓ ${subject_name}.pdf${NC}"
     else
         echo -e "${RED}  ✗ Ошибка сборки${NC}"
-        xelatex -interaction=nonstopmode main.tex 2>&1 | grep -E "^!|Error" | head -5 | sed "s/^/    /"
+        xelatex -interaction=nonstopmode main.tex > /tmp/xelatex_diag.log 2>&1 || true
+        grep -E "^!|Error|error|not found|undefined|missing" /tmp/xelatex_diag.log | head -20 | sed "s/^/    /" || true
+        echo "    --- last 10 lines of log ---"
+        tail -10 /tmp/xelatex_diag.log | sed "s/^/    /" || true
         cd - > /dev/null
         return 1
     fi

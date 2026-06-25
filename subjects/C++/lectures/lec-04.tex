@@ -233,8 +233,8 @@ Son: [ptr_to_Mom_vtable][m][ptr_to_Dad_vtable][d][s][Granny: g]
   \node[seg] at ($(b6) + (0,-0.42)$) {Granny};
 
   % Стрелки от vptr-ов к единственной Granny
-  \draw[->, thick] (b1.north) .. controls +(up:0.7) and +(up:0.9) .. (b6.north);
-  \draw[->, thick] (b3.north) .. controls +(up:0.5) and +(up:0.7) .. (b6.north);
+  \draw[->, thick] (b1.north) .. controls +(0,0.7) and +(0,0.9) .. (b6.north);
+  \draw[->, thick] (b3.north) .. controls +(0,0.5) and +(0,0.7) .. (b6.north);
 \end{tikzpicture}
 \caption{Без виртуального наследования vs с виртуальным наследованием}
 \end{figure}

@@ -89,6 +89,7 @@ jobs:
             texlive-fonts-extra \
             texlive-lang-cyrillic \
             texlive-latex-extra \
+            texlive-pictures \
             texlive-science \
             fonts-paratype \
             latexmk
