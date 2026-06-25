@@ -47,16 +47,21 @@
 \setmainfont{PT Serif}[Ligatures=TeX]
 \setsansfont{PT Sans}[Ligatures=TeX, Scale=0.95]
 
-\IfFontExistsTF{Latin Modern Mono}{%
-    \setmonofont{Latin Modern Mono}[Scale=0.9]
-    \newfontfamily\cyrillicfonttt{Latin Modern Mono}[Scale=0.9]
+\IfFontExistsTF{JetBrains Mono}{%
+    \setmonofont{JetBrains Mono}[Scale=0.85]
+    \newfontfamily\cyrillicfonttt{JetBrains Mono}[Scale=0.85]
 }{%
-    \IfFontExistsTF{Menlo}{%
-        \setmonofont{Menlo}[Scale=0.9]
-        \newfontfamily\cyrillicfonttt{Menlo}[Scale=0.9]
+    \IfFontExistsTF{PT Mono}{%
+        \setmonofont{PT Mono}[Scale=0.9]
+        \newfontfamily\cyrillicfonttt{PT Mono}[Scale=0.9]
     }{%
-        \setmonofont{Courier New}[Scale=0.9]
-        \newfontfamily\cyrillicfonttt{Courier New}[Scale=0.9]
+        \IfFontExistsTF{Menlo}{%
+            \setmonofont{Menlo}[Scale=0.9]
+            \newfontfamily\cyrillicfonttt{Menlo}[Scale=0.9]
+        }{%
+            \setmonofont{Latin Modern Mono}[Scale=0.9]
+            \newfontfamily\cyrillicfonttt{PT Serif}[Scale=0.9]
+        }%
     }%
 }%
 
@@ -156,7 +161,6 @@
 \newcounter{lecturenum}
 \newcommand{\lecture}[2]{%
     \setcounter{lecturenum}{#1}%
-    \setcounter{section}{0}%
     \newpage
     \phantomsection
     \addcontentsline{toc}{section}{#2}%
